@@ -1,5 +1,7 @@
 # E-commerce: Why Does Revenue Change and Who Comes Back?
 
+[![CI](https://github.com/Sdk0v1/ecommerce-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/Sdk0v1/ecommerce-analytics/actions/workflows/ci.yml)
+
 > Revenue grew ~9x from Jan to Nov 2017 and then plateaued at ~R$ 1M a month; the growth came from order volume, not order value, 97% of customers never order again, and late deliveries — concentrated in the North-East — go together with review scores 2 stars lower.
 
 **Tools:** PostgreSQL · Python (Pandas, NumPy, SciPy, Matplotlib) · Power BI
