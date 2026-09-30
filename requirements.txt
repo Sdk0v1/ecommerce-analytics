@@ -1,0 +1,8 @@
+# Python packages for the notebooks (tested versions in comments)
+pandas>=2.2        # 3.0.2
+numpy>=1.26        # 2.4.4
+scipy>=1.15        # 1.17.1 (stats.bootstrap uses the rng= argument)
+matplotlib>=3.8    # 3.10.9
+jupyter
+nbconvert>=7       # 7.17.1
+ipykernel
