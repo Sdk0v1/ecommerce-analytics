@@ -1,0 +1,90 @@
+# CI: rebuilds the whole analysis from raw data on every push and pull request.
+# Fails if any SQL file errors, any notebook errors, or SQL and Python numbers disagree.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:        # "Run workflow" button in the Actions tab
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: SQL + notebooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: olist
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: olist
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Install the PostgreSQL client
+        run: |
+          which psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+          psql --version
+
+      - name: Download the Olist data
+        run: bash scripts/download_data.sh
+
+      - name: Run all SQL files
+        run: bash scripts/run_sql.sh
+
+      - name: Run the notebooks (validation gate included)
+        working-directory: Python
+        run: |
+          for nb in data_cleaning rfm_analysis statistical_analysis sql_results_figures; do
+            echo "::group::$nb.ipynb"
+            jupyter nbconvert --to notebook --execute "$nb.ipynb" \
+              --output-dir "$RUNNER_TEMP/executed" --ExecutePreprocessor.timeout=900
+            echo "::endgroup::"
+          done
+
+      - name: Upload figures and tables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-output
+          path: |
+            reports/figures/*.png
+            reports/tables/sql_headline_numbers.csv
+            reports/tables/monthly_kpis.csv
+            reports/tables/cohort_retention.csv
+          retention-days: 14
