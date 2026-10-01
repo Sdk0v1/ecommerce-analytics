@@ -193,32 +193,58 @@ ORDER BY ib.purchase_month, revenue DESC;
 -- ---------------------------------------------------------------------
 -- R4.3: year-over-year revenue growth of the top 5 categories by total
 -- revenue (KPI period 2017-01..2018-08), comparing Jan-Aug 2018 with
--- Jan-Aug 2017 (same 8 months in both years, so seasonality is not mixed in)
+-- Jan-Aug 2017 (same 8 months in both years, so seasonality is not mixed in).
+-- Benchmark: row 'ALL CATEGORIES' = whole platform; share = category revenue
+-- / platform revenue of the same period; share_change_pp and
+-- growth_vs_platform_pp > 0 mean the category grew faster than the platform.
 -- ---------------------------------------------------------------------
-WITH top5 AS (
-    SELECT category
-    FROM analytics.item_base
-    WHERE in_kpi_period
-    GROUP BY category
-    ORDER BY SUM(item_revenue) DESC
-    LIMIT 5
-), yoy AS (
+WITH by_category AS (
     SELECT category,
            SUM(item_revenue) FILTER (WHERE purchase_month BETWEEN DATE '2017-01-01' AND DATE '2017-08-01') AS revenue_2017,
-           SUM(item_revenue) FILTER (WHERE purchase_month BETWEEN DATE '2018-01-01' AND DATE '2018-08-01') AS revenue_2018
+           SUM(item_revenue) FILTER (WHERE purchase_month BETWEEN DATE '2018-01-01' AND DATE '2018-08-01') AS revenue_2018,
+           SUM(item_revenue) AS revenue_total
     FROM analytics.item_base
     WHERE in_kpi_period
-      AND category IN (SELECT category FROM top5)
     GROUP BY category
+), top5 AS (
+    SELECT category, revenue_2017, revenue_2018
+    FROM by_category
+    ORDER BY revenue_total DESC
+    LIMIT 5
+), platform AS (
+    SELECT SUM(revenue_2017) AS revenue_2017,
+           SUM(revenue_2018) AS revenue_2018
+    FROM by_category
+), result AS (
+    SELECT 1 AS sort_group, 'ALL CATEGORIES'::text AS category,
+           revenue_2017, revenue_2018
+    FROM platform
+    UNION ALL
+    SELECT 2, category, revenue_2017, revenue_2018
+    FROM top5
+), metrics AS (
+    SELECT r.*,
+           100 * (r.revenue_2018 - r.revenue_2017) / NULLIF(r.revenue_2017, 0) AS yoy_growth_pct,
+           100 * r.revenue_2017 / NULLIF(p.revenue_2017, 0)                    AS share_2017_pct,
+           100 * r.revenue_2018 / NULLIF(p.revenue_2018, 0)                    AS share_2018_pct
+    FROM result r
+    CROSS JOIN platform p
 )
-SELECT RANK() OVER (ORDER BY revenue_2018 DESC)                       AS revenue_rank_2018,
+SELECT CASE WHEN sort_group = 2
+            THEN RANK() OVER (PARTITION BY sort_group ORDER BY revenue_2018 DESC)
+       END                                                      AS revenue_rank_2018,
        category,
-       ROUND(revenue_2017, 2)                                          AS revenue_jan_aug_2017,
-       ROUND(revenue_2018, 2)                                          AS revenue_jan_aug_2018,
-       ROUND(revenue_2018 - revenue_2017, 2)                           AS delta_revenue,
-       ROUND(100 * (revenue_2018 - revenue_2017) / NULLIF(revenue_2017, 0), 1) AS yoy_growth_pct
-FROM yoy
-ORDER BY revenue_2018 DESC;
+       ROUND(revenue_2017, 2)                                   AS revenue_jan_aug_2017,
+       ROUND(revenue_2018, 2)                                   AS revenue_jan_aug_2018,
+       ROUND(revenue_2018 - revenue_2017, 2)                    AS delta_revenue,
+       ROUND(yoy_growth_pct, 1)                                 AS yoy_growth_pct,
+       ROUND(share_2017_pct, 2)                                 AS share_2017_pct,
+       ROUND(share_2018_pct, 2)                                 AS share_2018_pct,
+       ROUND(share_2018_pct - share_2017_pct, 2)                AS share_change_pp,
+       ROUND(yoy_growth_pct
+             - MAX(yoy_growth_pct) FILTER (WHERE sort_group = 1) OVER (), 1) AS growth_vs_platform_pp
+FROM metrics
+ORDER BY sort_group, revenue_2018 DESC;
 
 -- ---------------------------------------------------------------------
 -- R5.1 + R5.2 + B3: states - revenue, orders, customers, AOV, rank,
