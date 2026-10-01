@@ -2,7 +2,7 @@
 -- revenue_analysis.sql
 -- Purpose : revenue drivers (volume vs AOV), categories, states,
 --           RANK() of categories within states
--- Answers : R2, R3, R4, R5  ·  Notes: P2 - Revenue Drivers, P2 - Categories and States
+-- Answers : R2, R3, R4 (incl. R4.3 YoY), R5 ·  Notes: P2 - Revenue Drivers, P2 - Categories and States
 -- Source  : analytics.order_base, analytics.item_base
 --   Order   = delivered order · Revenue = SUM(price + freight_value)
 -- Population: delivered orders purchased 2017-01 .. 2018-08
@@ -189,6 +189,36 @@ JOIN top5 USING (category)
 WHERE ib.in_kpi_period
 GROUP BY ib.purchase_month, ib.category
 ORDER BY ib.purchase_month, revenue DESC;
+
+-- ---------------------------------------------------------------------
+-- R4.3: year-over-year revenue growth of the top 5 categories by total
+-- revenue (KPI period 2017-01..2018-08), comparing Jan-Aug 2018 with
+-- Jan-Aug 2017 (same 8 months in both years, so seasonality is not mixed in)
+-- ---------------------------------------------------------------------
+WITH top5 AS (
+    SELECT category
+    FROM analytics.item_base
+    WHERE in_kpi_period
+    GROUP BY category
+    ORDER BY SUM(item_revenue) DESC
+    LIMIT 5
+), yoy AS (
+    SELECT category,
+           SUM(item_revenue) FILTER (WHERE purchase_month BETWEEN DATE '2017-01-01' AND DATE '2017-08-01') AS revenue_2017,
+           SUM(item_revenue) FILTER (WHERE purchase_month BETWEEN DATE '2018-01-01' AND DATE '2018-08-01') AS revenue_2018
+    FROM analytics.item_base
+    WHERE in_kpi_period
+      AND category IN (SELECT category FROM top5)
+    GROUP BY category
+)
+SELECT RANK() OVER (ORDER BY revenue_2018 DESC)                       AS revenue_rank_2018,
+       category,
+       ROUND(revenue_2017, 2)                                          AS revenue_jan_aug_2017,
+       ROUND(revenue_2018, 2)                                          AS revenue_jan_aug_2018,
+       ROUND(revenue_2018 - revenue_2017, 2)                           AS delta_revenue,
+       ROUND(100 * (revenue_2018 - revenue_2017) / NULLIF(revenue_2017, 0), 1) AS yoy_growth_pct
+FROM yoy
+ORDER BY revenue_2018 DESC;
 
 -- ---------------------------------------------------------------------
 -- R5.1 + R5.2 + B3: states - revenue, orders, customers, AOV, rank,
