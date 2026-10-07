@@ -1,5 +1,5 @@
 # CI: rebuilds the whole analysis from raw data on every push and pull request.
-# Fails if any SQL file errors, any notebook errors, or SQL and Python numbers disagree.
+# Fails if any SQL file errors, any Python script errors, or SQL and Python numbers disagree.
 name: CI
 
 on:
@@ -67,13 +67,11 @@ jobs:
       - name: Run all SQL files
         run: bash scripts/run_sql.sh
 
-      - name: Run the notebooks (validation gate included)
-        working-directory: Python
+      - name: Run the Python scripts (validation gate included)
         run: |
-          for nb in data_cleaning rfm_analysis statistical_analysis sql_results_figures; do
-            echo "::group::$nb.ipynb"
-            jupyter nbconvert --to notebook --execute "$nb.ipynb" \
-              --output-dir "$RUNNER_TEMP/executed" --ExecutePreprocessor.timeout=900
+          for s in data_cleaning rfm_analysis statistical_analysis sql_results_figures; do
+            echo "::group::$s.py"
+            python "Python/$s.py"
             echo "::endgroup::"
           done
 

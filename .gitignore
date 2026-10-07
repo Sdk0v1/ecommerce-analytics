@@ -6,14 +6,14 @@ data/raw/*
 .env
 kaggle.json
 
-# Python / Jupyter
+# Python / PyCharm
 __pycache__/
-.ipynb_checkpoints/
 .venv/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Generated exports (rebuild with SQL/99_export_tables.sql and the notebooks)
+# Generated exports (rebuild with SQL/99_export_tables.sql and the Python scripts)
 reports/tables/*.csv
