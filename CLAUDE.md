@@ -4,7 +4,7 @@ Portfolio project of a Junior Data Analyst: **"E-commerce: Why Does Revenue Chan
 
 ## Repository map
 - `SQL/` — PostgreSQL. Run order: `00_create_tables` → `01_analytics_views` → `monthly_kpis` → `revenue_analysis` → `customer_retention` → `cohort_analysis` → `delivery_analysis` → `99_export_tables` (see `scripts/run_sql.sh`).
-- `Python/` — notebooks, run order: `data_cleaning` → `rfm_analysis` → `statistical_analysis` → `sql_results_figures`.
+- `Python/` — analysis scripts (PyCharm, `# %%` cells), run order: `data_cleaning` → `rfm_analysis` → `statistical_analysis` → `sql_results_figures`.
 - `Documentation/` — data dictionary, business questions, methodology, insights, recommendations.
 - `reports/figures/` — charts made by code (never edit by hand). `reports/tables/` — generated CSVs (git-ignored).
 - `data/raw/` — Olist CSVs, **git-ignored**; download with `scripts/download_data.sh`.
@@ -14,7 +14,7 @@ Portfolio project of a Junior Data Analyst: **"E-commerce: Why Does Revenue Chan
 bash scripts/download_data.sh          # data into data/raw/
 createdb olist                         # once
 bash scripts/run_sql.sh                # all SQL in order (uses PG* env vars)
-cd Python && jupyter nbconvert --to notebook --execute --inplace data_cleaning.ipynb   # etc.
+python Python/data_cleaning.py         # etc., in the run order above (works from any folder)
 ```
 CI (`.github/workflows/ci.yml`) runs exactly these steps on every push and pull request.
 
@@ -30,12 +30,12 @@ CI (`.github/workflows/ci.yml`) runs exactly these steps on every push and pull 
 | Late | delivered **date** > estimated delivery **date** |
 | Review score | latest review of the order (by `review_answer_timestamp`) |
 
-Do not change a definition silently. If a change is needed: change it in `01_analytics_views.sql` **and** in `Python/data_cleaning.ipynb` (A9), update `Documentation/methodology.md`, and say so in the PR description.
+Do not change a definition silently. If a change is needed: change it in `01_analytics_views.sql` **and** in `Python/data_cleaning.py` (A9), update `Documentation/methodology.md`, and say so in the PR description.
 
 ## Rules
 1. **SQL style:** every query starts with a comment `-- <question ID>: <question>`; use CTEs, not deep nesting; aggregate "many" tables (items, payments, reviews) to order level **before** joining; `COUNT(DISTINCT ...)` for orders and customers; `NULLIF` in divisions; round only in the final `SELECT`.
-2. **SQL = Python:** `data_cleaning.ipynb` recomputes the headline numbers from raw CSVs and fails if they differ from `reports/tables/sql_headline_numbers.csv`. If you add a headline metric, add it to both `99_export_tables.sql` and the validation cell.
-3. **Notebooks** must run top to bottom without errors; every section = question → code → one-sentence finding with a number.
+2. **SQL = Python:** `data_cleaning.py` recomputes the headline numbers from raw CSVs and fails if they differ from `reports/tables/sql_headline_numbers.csv`. If you add a headline metric, add it to both `99_export_tables.sql` and the validation cell.
+3. **Python scripts** must run top to bottom without errors; every section = question → code → one-sentence finding with a number.
 4. **Charts:** title states a verified finding; axis labels with units; no dual-axis charts; "late" is always orange `#eb6834`, the main series blue `#2a78d6`.
 5. **Statistics:** report effect size and confidence intervals, not only p-values. **No causal language** ("causes", "leads to", "drives") for associations.
 6. **Never commit** `data/raw/*.csv`, generated `reports/tables/*.csv`, credentials, tokens or `.env` files.

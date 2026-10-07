@@ -1,7 +1,7 @@
 -- =====================================================================
 -- delivery_analysis.sql
 -- Purpose : delivery time, on-time %, median / p90, worst states, trend
--- Answers : D1, D2, D3, D4 (D5 -> Python/statistical_analysis.ipynb)
+-- Answers : D1, D2, D3, D4 (D5 -> Python/statistical_analysis.py)
 -- Notes   : P2 - Delivery Analysis
 -- Source  : analytics.order_base
 --   Population    = delivered orders purchased 2017-01 .. 2018-08 WITH a

@@ -7,7 +7,7 @@ Pages:
 2. State Detail (drill-through on customer_state)
 3. Category Detail (drill-through on category)
 
-Data source: CSV exports in `reports/tables/` written by `SQL/99_export_tables.sql` and the notebooks — `order_base.csv`, `item_base.csv`, `cohort_retention.csv`, `delivery_orders.csv`, `rfm_segments.csv`. They come from the PostgreSQL views `analytics.order_base` / `analytics.item_base`, so the definitions are the same as in the analysis. PostgreSQL booleans are exported as `t` / `f`.
+Data source: CSV exports in `reports/tables/` written by `SQL/99_export_tables.sql` and the Python scripts — `order_base.csv`, `item_base.csv`, `cohort_retention.csv`, `delivery_orders.csv`, `rfm_segments.csv`. They come from the PostgreSQL views `analytics.order_base` / `analytics.item_base`, so the definitions are the same as in the analysis. PostgreSQL booleans are exported as `t` / `f`.
 
 Measures (definitions match `Documentation/methodology.md`; expected values for the KPI period 2017-01 .. 2018-08):
 

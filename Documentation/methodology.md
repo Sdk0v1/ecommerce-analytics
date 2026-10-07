@@ -1,6 +1,6 @@
 # Methodology
 
-All definitions live in one place — `SQL/01_analytics_views.sql` — and are repeated identically in `Python/data_cleaning.ipynb`.
+All definitions live in one place — `SQL/01_analytics_views.sql` — and are repeated identically in `Python/data_cleaning.py`.
 
 ## 1. Definitions
 | Term | Definition | Population | Rows excluded |
