@@ -1,19 +1,19 @@
 -- =====================================================================
 -- monthly_kpis.sql
--- Purpose : orders, revenue, AOV per month + month-over-month change (LAG)
--- Answers : R1   ·  Notes: P2 - Monthly KPIs and MoM
--- Source  : analytics.order_base (definitions in 01_analytics_views.sql)
---   Order   = delivered order
---   Revenue = SUM(price + freight_value)
---   AOV     = Revenue / Orders
--- Population: delivered orders purchased 2017-01 .. 2018-08 (in_kpi_period)
+-- Мета    : замовлення, виручка, AOV за місяць + зміна місяць до місяця (LAG)
+-- Відповідає: R1   ·  Нотатки: P2 - Monthly KPIs and MoM
+-- Джерело : analytics.order_base (визначення в 01_analytics_views.sql)
+--   Замовлення = доставлене замовлення
+--   Виручка    = SUM(price + freight_value)
+--   AOV        = Виручка / Замовлення
+-- Вибірка: доставлені замовлення, куплені 2017-01 .. 2018-08 (in_kpi_period)
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- R1.1 + R1.2: monthly orders, revenue, AOV
--- R1.3: check that no calendar month is missing (LAG uses the previous ROW,
---       so a missing month would silently compare with two months ago).
---       generate_series builds the full month list; LEFT JOIN exposes gaps.
+-- R1.1 + R1.2: які щомісячні замовлення, виручка, AOV?
+-- R1.3: чи не пропущено жодного календарного місяця? (LAG бере попередній РЯДОК,
+--       тож пропущений місяць непомітно порівнювався б із позаминулим).
+--       generate_series будує повний список місяців; LEFT JOIN виявляє пропуски.
 -- ---------------------------------------------------------------------
 WITH months AS (
     SELECT generate_series(DATE '2017-01-01', DATE '2018-08-01', INTERVAL '1 month')::date AS month
@@ -35,8 +35,8 @@ LEFT JOIN monthly k ON k.month = m.month
 ORDER BY m.month;
 
 -- ---------------------------------------------------------------------
--- R1.4: MoM for revenue, orders and AOV
--- First month has no previous value -> LAG returns NULL -> growth is NULL.
+-- R1.4: яка MoM-динаміка виручки, замовлень і AOV?
+-- Перший місяць не має попереднього значення -> LAG повертає NULL -> приріст NULL.
 -- ---------------------------------------------------------------------
 WITH monthly AS (
     SELECT purchase_month               AS month,
@@ -70,8 +70,8 @@ FROM with_prev
 ORDER BY month;
 
 -- ---------------------------------------------------------------------
--- R1.5: 3-month rolling average of revenue and year-over-year growth
--- YoY with LAG(x, 12) is valid because R1.3 showed no missing months.
+-- R1.5: яке 3-місячне ковзне середнє виручки та приріст рік до року?
+-- YoY через LAG(x, 12) коректний, бо R1.3 показав відсутність пропущених місяців.
 -- ---------------------------------------------------------------------
 WITH monthly AS (
     SELECT purchase_month AS month,
@@ -93,7 +93,7 @@ FROM monthly
 ORDER BY month;
 
 -- ---------------------------------------------------------------------
--- R1 summary: volatility of MoM revenue growth (M2 in the note)
+-- R1 підсумок: наскільки волатильний MoM-приріст виручки? (M2 у нотатці)
 -- ---------------------------------------------------------------------
 WITH monthly AS (
     SELECT purchase_month AS month, SUM(revenue) AS revenue

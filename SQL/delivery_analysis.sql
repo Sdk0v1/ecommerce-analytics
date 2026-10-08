@@ -1,17 +1,17 @@
 -- =====================================================================
 -- delivery_analysis.sql
--- Purpose : delivery time, on-time %, median / p90, worst states, trend
--- Answers : D1, D2, D3, D4 (D5 -> Python/statistical_analysis.py)
--- Notes   : P2 - Delivery Analysis
--- Source  : analytics.order_base
---   Population    = delivered orders purchased 2017-01 .. 2018-08 WITH a
---                   customer delivery date (8 delivered orders have none)
---   Delivery days = (delivered_customer_ts - purchase_ts) in fractional days
---   Promised days = (estimated_delivery_date - purchase_ts) in fractional days
---   Delay days    = delivered date - estimated date (whole days, > 0 = late)
---   Late          = delivered DATE > estimated DATE
---   State         = customer_state (where the customer experiences the delay)
--- Minimum sample size for state comparisons: 300 orders
+-- Мета    : час доставки, % вчасних доставок, медіана / p90, найгірші штати, тренд
+-- Відповідає на : D1, D2, D3, D4 (D5 -> Python/statistical_analysis.py)
+-- Нотатки : P2 - Аналіз доставки
+-- Джерело : analytics.order_base
+--   Сукупність        = доставлені замовлення, куплені 2017-01 .. 2018-08, З
+--                       датою доставки клієнту (у 8 доставлених замовлень її немає)
+--   Дні доставки      = (delivered_customer_ts - purchase_ts) у дробових днях
+--   Обіцяні дні       = (estimated_delivery_date - purchase_ts) у дробових днях
+--   Дні затримки      = дата доставки - очікувана дата (цілі дні, > 0 = запізнення)
+--   Запізнення        = ДАТА доставки > очікувана ДАТА
+--   Штат              = customer_state (де клієнт відчуває затримку)
+-- Мінімальний розмір вибірки для порівняння штатів: 300 замовлень
 -- =====================================================================
 
 DROP VIEW IF EXISTS analytics.delivery_orders;
@@ -25,7 +25,7 @@ WHERE in_kpi_period
   AND has_delivery_date;
 
 -- ---------------------------------------------------------------------
--- D1 + D3 + D4: overall
+-- D1 + D3 + D4: загалом
 -- ---------------------------------------------------------------------
 SELECT COUNT(*)                                                                             AS delivered_orders,
        ROUND(100.0 * AVG(1 - is_late), 2)                                                   AS on_time_pct,
@@ -37,10 +37,10 @@ SELECT COUNT(*)                                                                 
        ROUND(MAX(delivery_days)::numeric, 2)                                                AS max_delivery_days,
        ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY estimated_days)::numeric, 2)       AS median_promised_days,
        ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY estimated_days - delivery_days)::numeric, 2)
-                                                                                            AS median_days_early   -- promised minus actual
+                                                                                            AS median_days_early   -- обіцяні мінус фактичні
 FROM analytics.delivery_orders;
 
--- A6: among LATE orders - how late?
+-- A6: серед замовлень ІЗ ЗАПІЗНЕННЯМ - наскільки запізно?
 SELECT COUNT(*)                                                                  AS late_orders,
        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY delay_days)                   AS median_delay_days,
        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY delay_days)                   AS p90_delay_days,
@@ -48,7 +48,7 @@ SELECT COUNT(*)                                                                 
 FROM analytics.delivery_orders
 WHERE is_late = 1;
 
--- Delay distribution (for the dose-response check in statistics)
+-- Розподіл затримок (для перевірки «доза-відповідь» у статистиці)
 SELECT CASE WHEN delay_days <= -10 THEN '1: 10+ days early'
             WHEN delay_days <= -1  THEN '2: 1-9 days early'
             WHEN delay_days =  0   THEN '3: on the promised day'
@@ -62,7 +62,7 @@ GROUP BY 1
 ORDER BY 1;
 
 -- ---------------------------------------------------------------------
--- D2: by customer state, with ranks (worst = 1) and national comparison
+-- D2: за штатом клієнта, з рангами (найгірший = 1) і порівнянням із країною загалом
 -- ---------------------------------------------------------------------
 WITH st AS (
     SELECT customer_state,
@@ -91,7 +91,7 @@ SELECT st.customer_state,
 FROM st CROSS JOIN nat
 ORDER BY st.late_rate DESC;
 
--- Worst 5 states by late % among states with >= 300 orders
+-- 5 найгірших штатів за % запізнень серед штатів із >= 300 замовленнями
 WITH st AS (
     SELECT customer_state, COUNT(*) AS orders, AVG(is_late) AS late_rate,
            PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY delivery_days) AS p90_days
@@ -108,11 +108,11 @@ ORDER BY late_rate DESC
 LIMIT 5;
 
 -- ---------------------------------------------------------------------
--- Over time: on-time % and median delivery days by purchase month
--- CAUTION: the data ends 2018-10. Orders bought in the last months that were
--- still in transit are not 'delivered' yet, so they are missing here - the
--- slowest orders of recent months are under-represented and recent delivery
--- times look better than they will end up. Compare recent months with care.
+-- У динаміці: % вчасних доставок і медіана днів доставки за місяцем покупки
+-- УВАГА: дані закінчуються 2018-10. Замовлення останніх місяців, які ще були
+-- в дорозі, ще не мають статусу delivered, тож їх тут немає - найповільніші
+-- замовлення останніх місяців недопредставлені, і нещодавній час доставки
+-- виглядає кращим, ніж буде насправді. Порівнюйте останні місяці обережно.
 -- ---------------------------------------------------------------------
 SELECT purchase_month,
        COUNT(*)                                                                         AS delivered_orders,
@@ -125,7 +125,7 @@ GROUP BY purchase_month
 ORDER BY purchase_month;
 
 -- ---------------------------------------------------------------------
--- D5 preview (full statistics in Python): review score by delivery status
+-- Попередній огляд D5 (повна статистика в Python): оцінка відгуку за статусом доставки
 -- ---------------------------------------------------------------------
 SELECT CASE is_late WHEN 1 THEN 'late' ELSE 'on time' END           AS delivery_status,
        COUNT(review_score)                                           AS reviews,
@@ -138,6 +138,6 @@ WHERE review_score IS NOT NULL
 GROUP BY 1;
 
 -- ---------------------------------------------------------------------
--- Export for Python (run in psql from the repository root):
+-- Експорт для Python (запускати в psql з кореня репозиторію):
 -- \copy (SELECT * FROM analytics.delivery_orders) TO 'reports/tables/delivery_orders.csv' WITH (FORMAT csv, HEADER true)
 -- ---------------------------------------------------------------------

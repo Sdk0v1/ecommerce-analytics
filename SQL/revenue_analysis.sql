@@ -1,19 +1,19 @@
 -- =====================================================================
 -- revenue_analysis.sql
--- Purpose : revenue drivers (volume vs AOV), categories, states,
---           RANK() of categories within states
--- Answers : R2, R3, R4 (incl. R4.3 YoY), R5 ·  Notes: P2 - Revenue Drivers, P2 - Categories and States
--- Source  : analytics.order_base, analytics.item_base
---   Order   = delivered order · Revenue = SUM(price + freight_value)
--- Population: delivered orders purchased 2017-01 .. 2018-08
--- Minimum sample size for state / category rates: 300 orders
+-- Мета    : чинники виручки (обсяг vs AOV), категорії, штати,
+--           RANK() категорій у межах штатів
+-- Відповідає на : R2, R3, R4 (зокрема R4.3 YoY), R5 ·  Нотатки: P2 - Чинники виручки, P2 - Категорії та штати
+-- Джерело : analytics.order_base, analytics.item_base
+--   Замовлення = доставлене замовлення · Виручка = SUM(price + freight_value)
+-- Сукупність: доставлені замовлення, куплені 2017-01 .. 2018-08
+-- Мінімальний розмір вибірки для показників штатів / категорій: 300 замовлень
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- R2/R3.1: monthly decomposition of the revenue change
---   R = N * A  ->  dR = dN*A0 (volume) + N0*dA (AOV) + dN*dA (interaction)
---   check_sum must be 0 (up to rounding)
--- R2/R3.2: main driver per month = effect with the largest absolute value
+-- R2/R3.1: помісячна декомпозиція зміни виручки
+--   R = N * A  ->  dR = dN*A0 (обсяг) + N0*dA (AOV) + dN*dA (взаємодія)
+--   check_sum має дорівнювати 0 (з точністю до округлення)
+-- R2/R3.2: головний чинник за місяць = ефект із найбільшим абсолютним значенням
 -- ---------------------------------------------------------------------
 WITH monthly AS (
     SELECT purchase_month AS month,
@@ -44,13 +44,13 @@ SELECT month,
        ROUND(interaction, 2)    AS interaction,
        ROUND(volume_effect + aov_effect + interaction - delta_revenue, 6) AS check_sum,
        CASE WHEN ABS(volume_effect) >= ABS(aov_effect) THEN 'volume' ELSE 'aov' END AS main_driver,
-       -- does AOV move in the same direction as revenue?
+       -- чи рухається AOV у тому ж напрямку, що й виручка?
        CASE WHEN SIGN(volume_effect) = SIGN(aov_effect) THEN 'same direction'
             ELSE 'opposite directions' END AS effects_direction
 FROM effects
 ORDER BY month;
 
--- Count of months by main driver
+-- Кількість місяців за головним чинником
 WITH monthly AS (
     SELECT purchase_month AS month, COUNT(DISTINCT order_id)::numeric AS n, SUM(revenue) AS r
     FROM analytics.order_base WHERE in_kpi_period GROUP BY purchase_month
@@ -66,7 +66,7 @@ FROM e
 WHERE volume_effect IS NOT NULL
 GROUP BY 1;
 
--- Share of the absolute monthly revenue movement explained by each effect
+-- Частка абсолютної помісячної зміни виручки, яку пояснює кожен ефект
 WITH monthly AS (
     SELECT purchase_month AS month, COUNT(DISTINCT order_id)::numeric AS n, SUM(revenue) AS r
     FROM analytics.order_base WHERE in_kpi_period GROUP BY purchase_month
@@ -84,9 +84,9 @@ FROM e
 WHERE volume_effect IS NOT NULL;
 
 -- ---------------------------------------------------------------------
--- R2/R3.3: whole-period decomposition
--- Compare the first 3 months (2017-01..03) with the last 3 months
--- (2018-06..08), using monthly averages to smooth single-month noise.
+-- R2/R3.3: декомпозиція за весь період
+-- Порівнюємо перші 3 місяці (2017-01..03) з останніми 3 місяцями
+-- (2018-06..08), беручи середньомісячні значення, щоб згладити шум окремих місяців.
 -- ---------------------------------------------------------------------
 WITH periods AS (
     SELECT CASE WHEN purchase_month BETWEEN DATE '2017-01-01' AND DATE '2017-03-01' THEN 'start'
@@ -96,7 +96,7 @@ WITH periods AS (
     WHERE in_kpi_period
 ), agg AS (
     SELECT period,
-           COUNT(DISTINCT order_id) / 3.0 AS n,          -- orders per month
+           COUNT(DISTINCT order_id) / 3.0 AS n,          -- замовлень на місяць
            SUM(revenue) / COUNT(DISTINCT order_id) AS a   -- AOV
     FROM periods
     WHERE period IS NOT NULL
@@ -116,12 +116,12 @@ SELECT ROUND(n0, 1) AS orders_per_month_start, ROUND(n1, 1) AS orders_per_month_
        ROUND(100 * (n1 - n0) * a0 / (n1 * a1 - n0 * a0), 1)          AS volume_share_pct,
        ROUND(100 * n0 * (a1 - a0) / (n1 * a1 - n0 * a0), 1)          AS aov_share_pct,
        ROUND(100 * (n1 - n0) * (a1 - a0) / (n1 * a1 - n0 * a0), 1)   AS interaction_share_pct,
-       -- log decomposition (no interaction term): shares of ln(R1/R0)
+       -- логарифмічна декомпозиція (без члена взаємодії): частки ln(R1/R0)
        ROUND(100 * LN(n1 / n0) / LN((n1 * a1) / (n0 * a0)), 1)       AS log_volume_share_pct,
        ROUND(100 * LN(a1 / a0) / LN((n1 * a1) / (n0 * a0)), 1)       AS log_aov_share_pct
 FROM p;
 
--- RD4: correlation of monthly % changes in orders and AOV (describe only - ~19 points)
+-- RD4: кореляція помісячних змін (%) замовлень і AOV (лише опис - ~19 точок)
 WITH monthly AS (
     SELECT purchase_month AS month, COUNT(DISTINCT order_id)::numeric AS n, SUM(revenue) / COUNT(DISTINCT order_id) AS a
     FROM analytics.order_base WHERE in_kpi_period GROUP BY purchase_month
@@ -136,10 +136,10 @@ SELECT ROUND(CORR(orders_growth, aov_growth)::numeric, 3) AS corr_orders_vs_aov_
 FROM g;
 
 -- ---------------------------------------------------------------------
--- R4.1 + R4.2: categories - revenue, orders, category revenue per order,
--- average item price, share and cumulative share (Pareto)
--- Orders per category = orders CONTAINING the category; their sum is larger
--- than total orders because some orders contain several categories.
+-- R4.1 + R4.2: категорії - виручка, замовлення, виручка категорії на замовлення,
+-- середня ціна товару, частка й кумулятивна частка (Парето)
+-- Замовлення категорії = замовлення, що МІСТЯТЬ цю категорію; їхня сума більша
+-- за загальну кількість замовлень, бо деякі замовлення містять кілька категорій.
 -- ---------------------------------------------------------------------
 WITH cat AS (
     SELECT category,
@@ -165,7 +165,7 @@ SELECT RANK() OVER (ORDER BY revenue DESC)                          AS revenue_r
 FROM cat
 ORDER BY revenue DESC;
 
--- A2: how many categories make 80% of revenue?
+-- A2: скільки категорій дають 80% виручки?
 WITH cat AS (
     SELECT category, SUM(item_revenue) AS revenue
     FROM analytics.item_base WHERE in_kpi_period GROUP BY category
@@ -178,7 +178,7 @@ SELECT COUNT(*) FILTER (WHERE cum_share < 0.8) + 1 AS categories_for_80pct_reven
        COUNT(*)                                     AS total_categories
 FROM cum;
 
--- A5: monthly revenue of the top 5 categories (did one category drive a spike?)
+-- A5: помісячна виручка топ-5 категорій (чи припадає сплеск на одну категорію?)
 WITH top5 AS (
     SELECT category FROM analytics.item_base WHERE in_kpi_period
     GROUP BY category ORDER BY SUM(item_revenue) DESC LIMIT 5
@@ -191,12 +191,12 @@ GROUP BY ib.purchase_month, ib.category
 ORDER BY ib.purchase_month, revenue DESC;
 
 -- ---------------------------------------------------------------------
--- R4.3: year-over-year revenue growth of the top 5 categories by total
--- revenue (KPI period 2017-01..2018-08), comparing Jan-Aug 2018 with
--- Jan-Aug 2017 (same 8 months in both years, so seasonality is not mixed in).
--- Benchmark: row 'ALL CATEGORIES' = whole platform; share = category revenue
--- / platform revenue of the same period; share_change_pp and
--- growth_vs_platform_pp > 0 mean the category grew faster than the platform.
+-- R4.3: річне (YoY) зростання виручки топ-5 категорій за загальною
+-- виручкою (KPI-період 2017-01..2018-08), порівняння січ.-серп. 2018 із
+-- січ.-серп. 2017 (ті самі 8 місяців в обох роках, тож сезонність не змішується).
+-- Орієнтир: рядок «ALL CATEGORIES» = уся платформа; share = виручка категорії
+-- / виручка платформи за той самий період; share_change_pp і
+-- growth_vs_platform_pp > 0 означають, що категорія зростала швидше за платформу.
 -- ---------------------------------------------------------------------
 WITH by_category AS (
     SELECT category,
@@ -247,8 +247,8 @@ FROM metrics
 ORDER BY sort_group, revenue_2018 DESC;
 
 -- ---------------------------------------------------------------------
--- R5.1 + R5.2 + B3: states - revenue, orders, customers, AOV, rank,
--- AOV with and without freight, freight share of order value
+-- R5.1 + R5.2 + B3: штати - виручка, замовлення, клієнти, AOV, ранг,
+-- AOV з доставкою і без неї, частка доставки у вартості замовлення
 -- ---------------------------------------------------------------------
 WITH st AS (
     SELECT customer_state,
@@ -278,9 +278,9 @@ FROM st
 ORDER BY revenue DESC;
 
 -- ---------------------------------------------------------------------
--- R4 x R5 (C1): top 3 categories by revenue within each state - RANK()
--- RANK chosen over ROW_NUMBER so that ties are not broken arbitrarily
--- (a tie can show 4 rows for a state - that is honest).
+-- R4 x R5 (C1): топ-3 категорії за виручкою в кожному штаті - RANK()
+-- RANK обрано замість ROW_NUMBER, щоб нічиї не розбивалися довільно
+-- (через нічию для штату може бути 4 рядки - це чесно).
 -- ---------------------------------------------------------------------
 WITH cs AS (
     SELECT customer_state, category, SUM(item_revenue) AS revenue
@@ -299,7 +299,7 @@ FROM ranked
 WHERE rank_in_state <= 3
 ORDER BY customer_state, rank_in_state;
 
--- C2: in how many states is the national #1 category NOT #1?
+-- C2: у скількох штатах категорія #1 загалом по країні НЕ є #1?
 WITH national AS (
     SELECT category FROM analytics.item_base WHERE in_kpi_period
     GROUP BY category ORDER BY SUM(item_revenue) DESC LIMIT 1

@@ -1,14 +1,14 @@
 # %% [markdown]
-# # RFM Segmentation
-# **Answers:** C5 (and supports C1-C4) · Notes: P3 - RFM Segmentation
-# **Input:** `reports/tables/orders_clean.csv` (from `data_cleaning.py`)
+# # RFM-сегментація
+# **Відповідає на:** C5 (і підтримує C1-C4) · Нотатки: P3 - RFM-сегментація
+# **Вхідні дані:** `reports/tables/orders_clean.csv` (з `data_cleaning.py`)
 #
-# | Metric | Definition |
+# | Метрика | Визначення |
 # | --- | --- |
-# | Recency | days from the customer's last delivered order to the reference date |
-# | Frequency | number of delivered orders |
-# | Monetary | total revenue (price + freight) of the customer's delivered orders |
-# | Reference date | the day after the last purchase in the data (the data is historical - "today" would make every customer look lost) |
+# | Recency | кількість днів від останнього доставленого замовлення клієнта до опорної дати |
+# | Frequency | кількість доставлених замовлень |
+# | Monetary | загальний дохід (ціна + доставка) з доставлених замовлень клієнта |
+# | Опорна дата | наступний день після останньої покупки в даних (дані історичні - "сьогодні" зробило б кожного клієнта схожим на втраченого) |
 
 # %%
 import pandas as pd
@@ -16,7 +16,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent  # repository root, so the script runs from any working directory
+ROOT = Path(__file__).resolve().parent.parent  # корінь репозиторію, щоб скрипт запускався з будь-якої робочої директорії
 
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 160)
@@ -29,8 +29,8 @@ TABLES.mkdir(parents=True, exist_ok=True)
 FIGS.mkdir(parents=True, exist_ok=True)
 
 # %%
-# Chart style: recessive grid/axes, thin marks, text in neutral ink (never series colour)
-BLUE, ORANGE = "#2a78d6", "#eb6834"      # on-time / main series = blue, late = orange (validated pair)
+# Стиль графіків: ненав'язлива сітка/осі, тонкі позначки, текст нейтральним кольором (ніколи кольором серії)
+BLUE, ORANGE = "#2a78d6", "#eb6834"      # вчасно / основна серія = синій, із запізненням = помаранчевий (перевірена пара)
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e5e4e0"
 plt.rcParams.update({
     "figure.dpi": 110, "savefig.dpi": 200, "figure.facecolor": "white",
@@ -48,8 +48,8 @@ def save(fig, name):
     plt.close(fig)
 
 # %% [markdown]
-# ## 1. Build the RFM table
-# One row per `customer_unique_id`, whole order history (2016-09 .. 2018-08).
+# ## 1. Побудова таблиці RFM
+# Один рядок на `customer_unique_id`, уся історія замовлень (2016-09 .. 2018-08).
 
 # %%
 orders = pd.read_csv(TABLES / "orders_clean.csv", parse_dates=["purchase_date", "purchase_month"])
@@ -67,8 +67,8 @@ print(rfm.shape)
 print(rfm.head())
 
 # %% [markdown]
-# ## 2. Distributions
-# **Question:** what do R, F and M look like? What share of customers has F = 1, 2, 3+?
+# ## 2. Розподіли
+# **Питання:** який вигляд мають R, F і M? Яка частка клієнтів має F = 1, 2, 3+?
 
 # %%
 print(rfm.describe(percentiles=[.2, .4, .5, .6, .8, .9]).T)
@@ -78,7 +78,7 @@ f_dist = rfm["frequency"].clip(upper=3).map({1: "1", 2: "2", 3: "3+"}).value_cou
 print(pd.DataFrame({"customers": f_dist, "pct": 100 * f_dist / f_dist.sum()}))
 
 # %%
-# Why quintiles cannot work for Frequency: the quintile edges collapse onto the same value
+# Чому квінтилі не працюють для Frequency: межі квінтилів збігаються в одне значення
 print("F quintile edges:", rfm["frequency"].quantile([0, .2, .4, .6, .8, 1]).tolist())
 try:
     pd.qcut(rfm["frequency"], 5)
@@ -99,19 +99,19 @@ fig.tight_layout()
 save(fig, "rfm_distributions.png")
 
 # %% [markdown]
-# **Finding:** 97.0% of customers ordered once, 2.8% twice and 0.2% three or more times, so Frequency cannot be split into quintiles (4 of 5 quintile edges are 1). Monetary is right-skewed (median R$ 107.79, max R$ 13,664); recency is spread fairly evenly over two years.
+# **Висновок:** 97.0% клієнтів замовили один раз, 2.8% - двічі і 0.2% - три чи більше разів, тому Frequency не можна поділити на квінтилі (4 з 5 меж квінтилів дорівнюють 1). Monetary має правосторонню асиметрію (медіана R$ 107.79, максимум R$ 13,664); recency розподілена досить рівномірно протягом двох років.
 
 # %% [markdown]
-# ## 3. Scoring method (decision)
+# ## 3. Метод оцінювання (рішення)
 #
-# | Metric | Method | Bins | Why |
+# | Метрика | Метод | Інтервали | Чому |
 # | --- | --- | --- | --- |
-# | R | quintiles (`pd.qcut`, 5 = most recent) | 20% of customers per score | recency has many distinct values and no natural business thresholds |
-# | F | **rule-based** | 1 order -> 1 · 2 orders -> 2 · 3+ orders -> 3 | quintiles are impossible: the vast majority of customers have exactly 1 order (see step 2) |
-# | M | quintiles (`pd.qcut`, 5 = highest value) | 20% of customers per score | skewed but continuous - quantiles are robust to the skew |
+# | R | квінтилі (`pd.qcut`, 5 = найнедавніші) | 20% клієнтів на кожну оцінку | recency має багато різних значень і немає природних бізнесових порогів |
+# | F | **на основі правил** | 1 замовлення -> 1 · 2 замовлення -> 2 · 3+ замовлень -> 3 | квінтилі неможливі: переважна більшість клієнтів має рівно 1 замовлення (див. крок 2) |
+# | M | квінтилі (`pd.qcut`, 5 = найвища цінність) | 20% клієнтів на кожну оцінку | асиметричний, але неперервний - квантилі стійкі до асиметрії |
 
 # %%
-R_LABELS = [5, 4, 3, 2, 1]          # low recency (recent) = best
+R_LABELS = [5, 4, 3, 2, 1]          # низька recency (нещодавно) = найкраще
 M_LABELS = [1, 2, 3, 4, 5]
 F_BINS, F_LABELS = [0, 1, 2, np.inf], [1, 2, 3]
 
@@ -119,25 +119,25 @@ rfm["R"] = pd.qcut(rfm["recency"], 5, labels=R_LABELS).astype(int)
 rfm["F"] = pd.cut(rfm["frequency"], bins=F_BINS, labels=F_LABELS).astype(int)
 rfm["M"] = pd.qcut(rfm["monetary"], 5, labels=M_LABELS).astype(int)
 
-# thresholds actually used - visible for the methodology document
+# фактично використані пороги - видимі для документа з методології
 print("R quintile edges (days):", rfm["recency"].quantile([.2, .4, .6, .8]).round(0).tolist())
 print("M quintile edges (R$):  ", rfm["monetary"].quantile([.2, .4, .6, .8]).round(2).tolist())
 print(rfm[["R", "F", "M"]].apply(pd.Series.value_counts).fillna(0).astype(int))
 
 # %% [markdown]
-# ## 4. Segment rules
-# Because most customers are one-time buyers, a single "One-time Customers" segment would hold almost everyone and give marketing nothing to act on. The one-time base is therefore split by **recency** and **value** - the two things that decide whether a second-purchase campaign is worth sending.
+# ## 4. Правила сегментації
+# Оскільки більшість клієнтів купують один раз, єдиний сегмент "One-time Customers" охопив би майже всіх і не дав би маркетингу нічого для дій. Тому базу одноразових покупців поділено за **recency** та **цінністю** - двома чинниками, які визначають, чи варто запускати кампанію другої покупки.
 #
-# | Segment | Rule | Business meaning | Possible action |
+# | Сегмент | Правило | Бізнесове значення | Можлива дія |
 # | --- | --- | --- | --- |
-# | Champions | F >= 2 and R >= 4 | bought more than once, recently | VIP treatment, referrals, early access |
-# | Loyal Customers | F >= 2 and R <= 3 | bought more than once, but not recently | win-back with a personal offer |
-# | Potential Loyalists | F = 1 and R >= 4 and M >= 4 | one recent, high-value first order | **main target for the second-purchase campaign** |
-# | Recent One-time | F = 1 and R >= 4 and M <= 3 | one recent, smaller first order | low-cost nudge (cross-sell email) |
-# | At Risk | F = 1 and R in {2, 3} and M >= 4 | valuable first order, drifting away | reactivation offer before they are lost |
-# | One-time Lapsed | every other F = 1 customer | old, lower-value single order | no spend; include only in cheap mass channels |
+# | Champions | F >= 2 і R >= 4 | купували більше одного разу, нещодавно | VIP-обслуговування, реферали, ранній доступ |
+# | Loyal Customers | F >= 2 і R <= 3 | купували більше одного разу, але давно | повернення з персональною пропозицією |
+# | Potential Loyalists | F = 1 і R >= 4 і M >= 4 | одне нещодавнє цінне перше замовлення | **головна ціль кампанії другої покупки** |
+# | Recent One-time | F = 1 і R >= 4 і M <= 3 | одне нещодавнє менше перше замовлення | недороге нагадування (cross-sell email) |
+# | At Risk | F = 1 і R у {2, 3} і M >= 4 | цінне перше замовлення, клієнт віддаляється | пропозиція реактивації, поки їх не втрачено |
+# | One-time Lapsed | усі інші клієнти з F = 1 | давнє одиничне замовлення меншої цінності | без витрат; лише в дешевих масових каналах |
 #
-# Rules are evaluated top to bottom, so every customer gets exactly one segment.
+# Правила застосовуються згори донизу, тож кожен клієнт отримує рівно один сегмент.
 
 # %%
 def assign_segment(row):
@@ -157,14 +157,14 @@ SEGMENT_ORDER = ["Champions", "Loyal Customers", "Potential Loyalists",
                  "Recent One-time", "At Risk", "One-time Lapsed"]
 rfm["segment"] = pd.Categorical(rfm.apply(assign_segment, axis=1), categories=SEGMENT_ORDER, ordered=True)
 
-# completeness check: every customer exactly one segment
+# перевірка повноти: кожен клієнт - рівно в одному сегменті
 assert rfm["segment"].notna().all()
 assert len(rfm) == orders["customer_unique_id"].nunique()
 print("all", len(rfm), "customers have exactly one segment")
 
 # %% [markdown]
-# ## 5. Segment profile
-# **Question:** how big is each segment, how much revenue does it bring, and how does it behave?
+# ## 5. Профіль сегментів
+# **Питання:** який розмір кожного сегмента, скільки доходу він приносить і як він поводиться?
 
 # %%
 profile = (rfm.groupby("segment", observed=True)
@@ -180,20 +180,20 @@ profile = profile[["customers", "pct_customers", "revenue", "pct_revenue", "avg_
 print(profile.round(2))
 
 # %%
-# Revenue concentration: what share of revenue comes from the top 10% / 20% of customers?
+# Концентрація доходу: яка частка доходу припадає на топ 10% / 20% клієнтів?
 m_sorted = rfm["monetary"].sort_values(ascending=False)
 for top in (0.1, 0.2):
     n = int(len(m_sorted) * top)
     print(f"top {int(top*100)}% of customers -> {100 * m_sorted.iloc[:n].sum() / m_sorted.sum():.1f}% of revenue")
 
 # %%
-# Do segments differ in where customers live? (share of the 3 largest states)
+# Чи відрізняються сегменти за місцем проживання клієнтів? (частка 3 найбільших штатів)
 seg_state = orders.merge(rfm[["segment"]], left_on="customer_unique_id", right_index=True)
-seg_state = seg_state.drop_duplicates("customer_unique_id")    # state of the customer's first listed order
+seg_state = seg_state.drop_duplicates("customer_unique_id")    # штат першого зазначеного замовлення клієнта
 print((pd.crosstab(seg_state["segment"], seg_state["customer_state"], normalize="index")[["SP", "RJ", "MG"]] * 100).round(1))
 
 # %% [markdown]
-# ## 6. Chart: share of customers vs share of revenue
+# ## 6. Графік: частка клієнтів проти частки доходу
 
 # %%
 fig, ax = plt.subplots(figsize=(9, 4))
@@ -217,18 +217,18 @@ fig.tight_layout()
 save(fig, "rfm_segments_customers_vs_revenue.png")
 
 # %% [markdown]
-# **Finding:** Repeat buyers (Champions + Loyal Customers) are only 3.0% of customers and 5.6% of revenue. High-value one-time buyers (Potential Loyalists + At Risk) are 30.3% of customers but 54.8% of revenue. Revenue is concentrated: the top 20% of customers bring 53.5% of revenue. The state mix of the segments is similar (SP 35-50% everywhere), so geography does not separate them.
+# **Висновок:** Повторні покупці (Champions + Loyal Customers) становлять лише 3.0% клієнтів і 5.6% доходу. Цінні одноразові покупці (Potential Loyalists + At Risk) - це 30.3% клієнтів, але 54.8% доходу. Дохід сконцентрований: топ 20% клієнтів приносять 53.5% доходу. Розподіл сегментів за штатами схожий (SP 35-50% скрізь), тож географія їх не розділяє.
 
 # %% [markdown]
-# ## 7. Export for Power BI
+# ## 7. Експорт для Power BI
 
 # %%
 rfm.reset_index().to_csv(TABLES / "rfm_segments.csv", index=False)
 print("saved", TABLES / "rfm_segments.csv", rfm.shape)
 
 # %% [markdown]
-# ## Conclusion (C5)
+# ## Підсумок (C5)
 #
-# Classic RFM is **weak in this dataset** because Frequency hardly varies - in practice this is an **R x M segmentation** of one-time buyers plus a small repeat group. That is itself a finding: the business has almost no loyal base to segment.
-# It is still useful for action: 28,326 high-value one-time customers (Potential Loyalists 14,503 recent + At Risk 13,823 older) hold 54.8% of revenue and are the natural target for a second-purchase campaign; the 40,389 One-time Lapsed customers are the lowest priority.
-# Limitation: the segment thresholds are quintiles of this dataset, not business-validated values; the segments describe past behaviour and do not predict who will buy again.
+# Класичний RFM **слабкий на цьому датасеті**, бо Frequency майже не змінюється - на практиці це **R x M сегментація** одноразових покупців плюс невелика група повторних. Це саме по собі висновок: у бізнесу майже немає лояльної бази для сегментації.
+# Проте вона корисна для дій: 28,326 цінних одноразових клієнтів (Potential Loyalists 14,503 нещодавніх + At Risk 13,823 давніших) дають 54.8% доходу і є природною ціллю для кампанії другої покупки; 40,389 клієнтів One-time Lapsed мають найнижчий пріоритет.
+# Обмеження: пороги сегментів - це квінтилі цього датасету, а не перевірені бізнесом значення; сегменти описують минулу поведінку і не прогнозують, хто купить знову.

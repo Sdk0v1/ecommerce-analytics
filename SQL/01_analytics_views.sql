@@ -1,28 +1,28 @@
 -- =====================================================================
 -- 01_analytics_views.sql
--- Purpose : one place for all business definitions. Every analysis file,
---           the Python validation and Power BI read these views, so the
---           numbers are consistent everywhere.
--- Notes   : P1 - Definitions, P1 - Data Quality Report
--- Run     : psql -d olist -f SQL/01_analytics_views.sql   (after 00)
+-- Мета    : єдине місце для всіх бізнес-визначень. Кожен файл аналізу,
+--           валідація в Python і Power BI читають ці view, тому
+--           цифри всюди узгоджені.
+-- Нотатки : P1 - Definitions, P1 - Data Quality Report
+-- Запуск  : psql -d olist -f SQL/01_analytics_views.sql   (після 00)
 --
--- DEFINITIONS (decided in P1 - Definitions)
---   Order        = order with order_status = 'delivered'
---                  (96,478 of 99,441 orders; canceled/unavailable/in-transit excluded)
---   Revenue      = SUM(price + freight_value) from order_items
---                  (what the customer paid for goods + shipping; exists at item
---                   level, so revenue by category adds up to total revenue)
---   AOV          = Revenue / COUNT(DISTINCT order_id)
---   Customer     = customer_unique_id (customer_id is created per order)
---   Month        = DATE_TRUNC('month', order_purchase_timestamp)
---   KPI period   = 2017-01 .. 2018-08 (complete months; 2016 has 3 sparse
---                  months with a gap, 2018-09/10 have < 20 orders)
---   Delivery days= (delivered_customer_date - purchase_timestamp) in fractional days
---   Late         = delivered_customer_date::date > estimated_delivery_date::date
---                  (estimated date always has time 00:00 -> compare on DATE level;
---                   delivered on the promised day = on time)
---   Review score = latest review of the order (by answer timestamp) - 547 orders
---                  have more than one review
+-- ВИЗНАЧЕННЯ (ухвалені в P1 - Definitions)
+--   Замовлення   = замовлення з order_status = 'delivered'
+--                  (96,478 з 99,441 замовлень; скасовані/недоступні/в дорозі виключено)
+--   Виручка      = SUM(price + freight_value) з order_items
+--                  (що клієнт заплатив за товари + доставку; існує на рівні
+--                   товару, тож виручка за категоріями сумується до загальної виручки)
+--   AOV          = Виручка / COUNT(DISTINCT order_id)
+--   Клієнт       = customer_unique_id (customer_id створюється для кожного замовлення)
+--   Місяць       = DATE_TRUNC('month', order_purchase_timestamp)
+--   Період KPI   = 2017-01 .. 2018-08 (повні місяці; у 2016 є 3 розріджені
+--                  місяці з пропуском, у 2018-09/10 < 20 замовлень)
+--   Дні доставки = (delivered_customer_date - purchase_timestamp) у дробових днях
+--   Запізнення   = delivered_customer_date::date > estimated_delivery_date::date
+--                  (очікувана дата завжди має час 00:00 -> порівнюємо на рівні DATE;
+--                   доставлено в обіцяний день = вчасно)
+--   Оцінка       = останній відгук до замовлення (за часом відповіді) - 547 замовлень
+--                  мають більше ніж один відгук
 -- =====================================================================
 
 CREATE SCHEMA IF NOT EXISTS analytics;
@@ -31,10 +31,10 @@ DROP VIEW IF EXISTS analytics.item_base CASCADE;
 DROP VIEW IF EXISTS analytics.order_base CASCADE;
 
 -- ---------------------------------------------------------------------
--- order_base : one row = one delivered order
+-- order_base : один рядок = одне доставлене замовлення
 -- ---------------------------------------------------------------------
 CREATE VIEW analytics.order_base AS
-WITH items AS (                        -- order_items aggregated to order level
+WITH items AS (                        -- order_items, агреговані до рівня замовлення
     SELECT order_id,
            COUNT(*)                     AS n_items,
            COUNT(DISTINCT seller_id)    AS n_sellers,
@@ -43,14 +43,14 @@ WITH items AS (                        -- order_items aggregated to order level
            SUM(price + freight_value)   AS revenue
     FROM raw.order_items
     GROUP BY order_id
-), pays AS (                           -- payments aggregated to order level
+), pays AS (                           -- payments, агреговані до рівня замовлення
     SELECT order_id,
            SUM(payment_value)           AS paid_value,
-           -- main payment method = the row with the largest value
+           -- основний спосіб оплати = рядок із найбільшою сумою
            (ARRAY_AGG(payment_type ORDER BY payment_value DESC, payment_sequential))[1] AS main_payment_type
     FROM raw.payments
     GROUP BY order_id
-), last_review AS (                    -- one review per order: the latest one
+), last_review AS (                    -- один відгук на замовлення: найостанніший
     SELECT order_id, review_score, review_creation_date
     FROM (
         SELECT r.*,
@@ -88,13 +88,13 @@ SELECT
     EXTRACT(EPOCH FROM (o.order_estimated_delivery_date - o.order_purchase_timestamp)) / 86400.0
                                                                  AS estimated_days,
     (o.order_delivered_customer_date::date - o.order_estimated_delivery_date::date)
-                                                                 AS delay_days,      -- whole days, >0 = late
+                                                                 AS delay_days,      -- цілі дні, >0 = запізнення
     CASE WHEN o.order_delivered_customer_date IS NULL THEN NULL
          WHEN o.order_delivered_customer_date::date > o.order_estimated_delivery_date::date THEN 1
          ELSE 0 END                                              AS is_late,
     r.review_score,
     r.review_creation_date,
-    -- review written before the order actually arrived (see P3 cleaning A8)
+    -- відгук написано до фактичного отримання замовлення (див. P3 cleaning A8)
     (r.review_creation_date < o.order_delivered_customer_date::date) AS review_before_delivery
 FROM raw.orders o
 JOIN raw.customers c   ON c.customer_id = o.customer_id
@@ -104,7 +104,7 @@ LEFT JOIN last_review r ON r.order_id   = o.order_id
 WHERE o.order_status = 'delivered';
 
 -- ---------------------------------------------------------------------
--- item_base : one row = one item of a delivered order, with category
+-- item_base : один рядок = один товар доставленого замовлення, з категорією
 -- ---------------------------------------------------------------------
 CREATE VIEW analytics.item_base AS
 SELECT
@@ -112,8 +112,8 @@ SELECT
     i.order_item_id,
     i.product_id,
     i.seller_id,
-    COALESCE(t.product_category_name_english,     -- English name
-             p.product_category_name,             -- untranslated (2 categories)
+    COALESCE(t.product_category_name_english,     -- англійська назва
+             p.product_category_name,             -- без перекладу (2 категорії)
              'unknown')                                  AS category,
     i.price,
     i.freight_value,
@@ -128,16 +128,16 @@ LEFT JOIN raw.products p              ON p.product_id = i.product_id
 LEFT JOIN raw.category_translation t  ON t.product_category_name = p.product_category_name;
 
 -- ---------------------------------------------------------------------
--- Sanity checks
+-- Перевірки на адекватність
 -- ---------------------------------------------------------------------
--- 1. order_base has one row per delivered order and no fan-out
+-- 1. чи має order_base один рядок на доставлене замовлення і жодного fan-out?
 SELECT COUNT(*) AS rows, COUNT(DISTINCT order_id) AS orders FROM analytics.order_base;
 
--- 2. item revenue adds up to order revenue (category analysis is consistent)
+-- 2. чи сумується виручка товарів до виручки замовлень (аналіз категорій узгоджений)?
 SELECT (SELECT SUM(revenue)      FROM analytics.order_base) AS order_revenue,
        (SELECT SUM(item_revenue) FROM analytics.item_base)  AS item_revenue;
 
--- 3. rows excluded from each analysis (P1 - Data Quality Report)
+-- 3. скільки рядків виключено з кожного аналізу? (P1 - Data Quality Report)
 SELECT
     (SELECT COUNT(*) FROM raw.orders)                                       AS all_orders,
     (SELECT COUNT(*) FROM raw.orders WHERE order_status <> 'delivered')     AS excluded_not_delivered,

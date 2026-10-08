@@ -1,21 +1,21 @@
 -- =====================================================================
 -- 00_create_tables.sql
--- Purpose : create raw tables for the Olist dataset, load the CSVs,
---           verify row counts, add keys and indexes.
--- Notes   : P1 - Data Loading (PostgreSQL), P1 - ERD and Relationships
--- Run     : from the repository root (so relative CSV paths work):
+-- Мета    : створити сирі таблиці для датасету Olist, завантажити CSV,
+--           перевірити кількість рядків, додати ключі та індекси.
+-- Нотатки : P1 - Data Loading (PostgreSQL), P1 - ERD and Relationships
+-- Запуск  : з кореня репозиторію (щоб працювали відносні шляхи до CSV):
 --             psql -d olist -f SQL/00_create_tables.sql
--- Rules   : ids -> TEXT, timestamps -> TIMESTAMP, money -> NUMERIC(10,2)
---           PRIMARY KEY only where uniqueness was verified (see checks)
+-- Правила : id -> TEXT, мітки часу -> TIMESTAMP, гроші -> NUMERIC(10,2)
+--           PRIMARY KEY лише там, де унікальність перевірено (див. перевірки)
 -- =====================================================================
 
 DROP SCHEMA IF EXISTS raw CASCADE;
 CREATE SCHEMA raw;
 
 -- ---------------------------------------------------------------------
--- orders : one row = one order
--- order_estimated_delivery_date is TIMESTAMP in the CSV, but every value
--- has time 00:00:00 -> it is effectively a DATE (see P1 - Definitions).
+-- orders : один рядок = одне замовлення
+-- order_estimated_delivery_date у CSV має тип TIMESTAMP, але кожне значення
+-- має час 00:00:00 -> фактично це DATE (див. P1 - Definitions).
 -- ---------------------------------------------------------------------
 CREATE TABLE raw.orders (
     order_id                       TEXT,
@@ -28,7 +28,7 @@ CREATE TABLE raw.orders (
     order_estimated_delivery_date  TIMESTAMP
 );
 
--- order_items : one row = one item line (one unit) in an order
+-- order_items : один рядок = одна товарна позиція (одна одиниця) у замовленні
 CREATE TABLE raw.order_items (
     order_id             TEXT,
     order_item_id        INTEGER,
@@ -39,7 +39,7 @@ CREATE TABLE raw.order_items (
     freight_value        NUMERIC(10,2)
 );
 
--- customers : one row = one customer_id (= one order!)
+-- customers : один рядок = один customer_id (= одне замовлення!)
 CREATE TABLE raw.customers (
     customer_id               TEXT,
     customer_unique_id        TEXT,
@@ -48,7 +48,7 @@ CREATE TABLE raw.customers (
     customer_state            TEXT
 );
 
--- products : one row = one product (column names keep the original typos)
+-- products : один рядок = один товар (назви колонок зберігають оригінальні помилки)
 CREATE TABLE raw.products (
     product_id                  TEXT,
     product_category_name       TEXT,
@@ -61,7 +61,7 @@ CREATE TABLE raw.products (
     product_width_cm            INTEGER
 );
 
--- sellers : one row = one seller
+-- sellers : один рядок = один продавець
 CREATE TABLE raw.sellers (
     seller_id               TEXT,
     seller_zip_code_prefix  TEXT,
@@ -69,7 +69,7 @@ CREATE TABLE raw.sellers (
     seller_state            TEXT
 );
 
--- payments : one row = one payment method used in an order
+-- payments : один рядок = один спосіб оплати, використаний у замовленні
 CREATE TABLE raw.payments (
     order_id              TEXT,
     payment_sequential    INTEGER,
@@ -78,7 +78,7 @@ CREATE TABLE raw.payments (
     payment_value         NUMERIC(10,2)
 );
 
--- reviews : one row = one review (review_id is NOT unique - see K7)
+-- reviews : один рядок = один відгук (review_id НЕ унікальний - див. K7)
 CREATE TABLE raw.reviews (
     review_id                TEXT,
     order_id                 TEXT,
@@ -89,16 +89,16 @@ CREATE TABLE raw.reviews (
     review_answer_timestamp  TIMESTAMP
 );
 
--- category_translation : Portuguese -> English category names
+-- category_translation : назви категорій португальською -> англійською
 CREATE TABLE raw.category_translation (
     product_category_name          TEXT,
     product_category_name_english  TEXT
 );
 
 -- =====================================================================
--- LOAD (psql meta-commands; paths are relative to the repository root)
--- FORMAT csv: unquoted empty fields become NULL; quoted line breaks in
--- review comments are handled correctly.
+-- ЗАВАНТАЖЕННЯ (метакоманди psql; шляхи відносні до кореня репозиторію)
+-- FORMAT csv: порожні поля без лапок стають NULL; переноси рядків у лапках
+-- у коментарях відгуків обробляються коректно.
 -- =====================================================================
 \copy raw.orders               FROM 'data/raw/olist_orders_dataset.csv'              WITH (FORMAT csv, HEADER true)
 \copy raw.order_items          FROM 'data/raw/olist_order_items_dataset.csv'         WITH (FORMAT csv, HEADER true)
@@ -110,7 +110,7 @@ CREATE TABLE raw.category_translation (
 \copy raw.category_translation FROM 'data/raw/product_category_name_translation.csv' WITH (FORMAT csv, HEADER true)
 
 -- =====================================================================
--- VERIFY row counts (expected from the CSVs / Python len())
+-- ПЕРЕВІРКА кількості рядків (очікувані значення з CSV / Python len())
 -- orders 99,441 · order_items 112,650 · customers 99,441 · products 32,951
 -- sellers 3,095 · payments 103,886 · reviews 99,224 · category_translation 71
 -- =====================================================================
@@ -124,10 +124,10 @@ UNION ALL SELECT 'reviews',              COUNT(*) FROM raw.reviews
 UNION ALL SELECT 'category_translation', COUNT(*) FROM raw.category_translation;
 
 -- =====================================================================
--- KEY CHECKS (K1-K10 in P1 - ERD and Relationships)
+-- ПЕРЕВІРКИ КЛЮЧІВ (K1-K10 у P1 - ERD and Relationships)
 -- =====================================================================
 
--- K1 / K2 / K4: uniqueness of candidate keys (duplicates should be 0)
+-- K1 / K2 / K4: чи унікальні потенційні ключі? (дублікатів має бути 0)
 SELECT 'K1 orders.order_id'            AS check_name, COUNT(*) - COUNT(DISTINCT order_id)    AS duplicates FROM raw.orders
 UNION ALL
 SELECT 'K2 customers.customer_id',                    COUNT(*) - COUNT(DISTINCT customer_id)           FROM raw.customers
@@ -140,12 +140,12 @@ SELECT 'sellers.seller_id',                           COUNT(*) - COUNT(DISTINCT 
 UNION ALL
 SELECT 'K7 reviews.review_id',                        COUNT(*) - COUNT(DISTINCT review_id)             FROM raw.reviews;
 
--- K2: customer_id vs customer_unique_id
+-- K2: скільки customer_id порівняно з customer_unique_id?
 SELECT COUNT(DISTINCT customer_id)        AS customer_ids,
        COUNT(DISTINCT customer_unique_id) AS unique_customers
 FROM raw.customers;
 
--- K3: people (customer_unique_id) with more than one customer_id
+-- K3: скільки людей (customer_unique_id) мають більше ніж один customer_id?
 SELECT COUNT(*) AS unique_ids_with_several_customer_ids
 FROM (
     SELECT customer_unique_id
@@ -154,7 +154,7 @@ FROM (
     HAVING COUNT(DISTINCT customer_id) > 1
 ) t;
 
--- K5: orders without items, by status
+-- K5: скільки замовлень без товарів, за статусом?
 SELECT o.order_status, COUNT(*) AS orders_without_items
 FROM raw.orders o
 LEFT JOIN raw.order_items i ON i.order_id = o.order_id
@@ -162,16 +162,16 @@ WHERE i.order_id IS NULL
 GROUP BY o.order_status
 ORDER BY orders_without_items DESC;
 
--- K6: payment rows per order
+-- K6: скільки рядків оплат припадає на замовлення?
 SELECT MIN(n) AS min_rows, MAX(n) AS max_rows,
        COUNT(*) FILTER (WHERE n > 1) AS orders_with_several_payment_rows
 FROM (SELECT order_id, COUNT(*) AS n FROM raw.payments GROUP BY order_id) t;
 
--- K7: orders with more than one review
+-- K7: скільки замовлень мають більше ніж один відгук?
 SELECT COUNT(*) AS orders_with_several_reviews
 FROM (SELECT order_id FROM raw.reviews GROUP BY order_id HAVING COUNT(*) > 1) t;
 
--- K8: orphans
+-- K8: чи є записи-сироти без батьківського запису?
 SELECT 'items without product' AS check_name, COUNT(*) AS n
 FROM raw.order_items i LEFT JOIN raw.products p ON p.product_id = i.product_id
 WHERE p.product_id IS NULL
@@ -192,8 +192,8 @@ SELECT 'reviews without order', COUNT(*)
 FROM raw.reviews r LEFT JOIN raw.orders o ON o.order_id = r.order_id
 WHERE o.order_id IS NULL;
 
--- K9: item value (price + freight) vs payments, per order
--- Aggregate each "many" table to order level FIRST, then join (fan-out trap).
+-- K9: чи збігається вартість товарів (ціна + доставка) з оплатами по кожному замовленню?
+-- СПОЧАТКУ агрегуємо кожну таблицю «багато» до рівня замовлення, потім зʼєднуємо (пастка fan-out).
 WITH items AS (
     SELECT order_id, SUM(price + freight_value) AS item_value
     FROM raw.order_items
@@ -211,7 +211,7 @@ SELECT COUNT(*)                                                         AS order
 FROM items i
 JOIN pays  p USING (order_id);
 
--- K10: categories without an English translation
+-- K10: які категорії не мають англійського перекладу?
 SELECT p.product_category_name, COUNT(*) AS products
 FROM raw.products p
 LEFT JOIN raw.category_translation t USING (product_category_name)
@@ -220,8 +220,8 @@ WHERE p.product_category_name IS NOT NULL
 GROUP BY p.product_category_name;
 
 -- =====================================================================
--- KEYS (only where the checks above proved uniqueness)
--- review_id is NOT unique -> no primary key on raw.reviews.
+-- КЛЮЧІ (лише там, де перевірки вище підтвердили унікальність)
+-- review_id НЕ унікальний -> на raw.reviews немає первинного ключа.
 -- =====================================================================
 ALTER TABLE raw.orders               ADD PRIMARY KEY (order_id);
 ALTER TABLE raw.customers            ADD PRIMARY KEY (customer_id);
@@ -237,10 +237,10 @@ ALTER TABLE raw.order_items ADD FOREIGN KEY (product_id)  REFERENCES raw.product
 ALTER TABLE raw.order_items ADD FOREIGN KEY (seller_id)   REFERENCES raw.sellers (seller_id);
 ALTER TABLE raw.payments    ADD FOREIGN KEY (order_id)    REFERENCES raw.orders (order_id);
 ALTER TABLE raw.reviews     ADD FOREIGN KEY (order_id)    REFERENCES raw.orders (order_id);
--- products -> category_translation is NOT enforced: 2 categories have no translation (K10).
+-- products -> category_translation НЕ забезпечується обмеженням: 2 категорії не мають перекладу (K10).
 
 -- =====================================================================
--- INDEXES
+-- ІНДЕКСИ
 -- =====================================================================
 CREATE INDEX ON raw.orders (customer_id);
 CREATE INDEX ON raw.orders (order_purchase_timestamp);

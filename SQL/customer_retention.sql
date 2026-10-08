@@ -1,20 +1,20 @@
 -- =====================================================================
 -- customer_retention.sql
--- Purpose : one-time vs repeat customers, time to return, repeat rate
---           over time and by segment
--- Answers : C1, C2, C3, C4  ·  Notes: P2 - Repeat Purchase
--- Source  : analytics.order_base, analytics.item_base
---   Customer        = customer_unique_id  (NOT customer_id - one per order)
---   Order           = delivered order (whole history 2016-09 .. 2018-08)
---   Repeat customer = customer with >= 2 delivered orders
---   Strict repeat   = customer with orders on >= 2 different purchase DATES
---                     (same-day "repeats" are often one basket split in two)
---   Repeat rate     = repeat customers / all customers
--- Last purchase date in the data: 2018-08-29 -> reference for censoring
+-- Мета    : разові vs повторні клієнти, час до повернення, частка повторних
+--           покупців у динаміці та за сегментами
+-- Відповідає на : C1, C2, C3, C4  ·  Нотатки: P2 - Повторні покупки
+-- Джерело : analytics.order_base, analytics.item_base
+--   Клієнт             = customer_unique_id  (НЕ customer_id - він свій для кожного замовлення)
+--   Замовлення         = доставлене замовлення (уся історія 2016-09 .. 2018-08)
+--   Повторний клієнт   = клієнт із >= 2 доставленими замовленнями
+--   Строгий повторний  = клієнт із замовленнями у >= 2 різні ДАТИ покупки
+--                        («повтори» того самого дня часто є одним кошиком, розбитим на два)
+--   Частка повторних   = повторні клієнти / усі клієнти
+-- Остання дата покупки в даних: 2018-08-29 -> точка відліку для цензурування
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- C1/C2.1: headline numbers
+-- C1/C2.1: ключові показники
 -- ---------------------------------------------------------------------
 WITH per_customer AS (
     SELECT customer_unique_id,
@@ -33,7 +33,7 @@ SELECT COUNT(*)                                              AS total_customers,
        ROUND(100.0 * COUNT(*) FILTER (WHERE orders = 1) / COUNT(*), 2)         AS one_time_pct
 FROM per_customer;
 
--- C1/C2.2: distribution of orders per customer
+-- C1/C2.2: розподіл кількості замовлень на клієнта
 WITH per_customer AS (
     SELECT customer_unique_id, COUNT(DISTINCT order_id) AS orders
     FROM analytics.order_base
@@ -46,7 +46,7 @@ FROM per_customer
 GROUP BY 1
 ORDER BY 1;
 
--- C1/C2.3: share of orders and revenue coming from repeat customers
+-- C1/C2.3: частка замовлень і виручки від повторних клієнтів
 WITH per_customer AS (
     SELECT customer_unique_id, COUNT(DISTINCT order_id) AS orders
     FROM analytics.order_base
@@ -58,8 +58,8 @@ FROM analytics.order_base ob
 JOIN per_customer pc USING (customer_unique_id);
 
 -- ---------------------------------------------------------------------
--- C3.1 + C3.2: time between 1st and 2nd order
--- ROW_NUMBER orders each customer's purchases; LEAD gives the next one.
+-- C3.1 + C3.2: час між 1-м і 2-м замовленням
+-- ROW_NUMBER упорядковує покупки кожного клієнта; LEAD дає наступну.
 -- ---------------------------------------------------------------------
 WITH ordered AS (
     SELECT customer_unique_id, order_id, purchase_ts,
@@ -83,7 +83,7 @@ SELECT COUNT(*)                                                                 
        ROUND(100.0 * COUNT(*) FILTER (WHERE days_to_second <= 180) / COUNT(*), 1)            AS pct_within_180_days
 FROM second;
 
--- Same statistics for STRICT repeats (2nd order on a later date)
+-- Та сама статистика для СТРОГИХ повторних (2-ге замовлення в пізнішу дату)
 WITH days AS (
     SELECT DISTINCT customer_unique_id, purchase_date FROM analytics.order_base
 ), ordered AS (
@@ -104,11 +104,11 @@ SELECT COUNT(*)                                                                 
 FROM second;
 
 -- ---------------------------------------------------------------------
--- C1.4: repeat rate over time with a FIXED 90-day window
--- A customer "returned" if they placed another order on a later date within
--- 90 days of the first order. Only first-purchase months whose customers all
--- had 90 days of observation (first order <= 2018-08-29 - 90 days) are shown
--- -> avoids right-censoring.
+-- C1.4: частка повторних покупців у динаміці з ФІКСОВАНИМ 90-денним вікном
+-- Клієнт «повернувся», якщо зробив ще одне замовлення в пізнішу дату протягом
+-- 90 днів після першого замовлення. Показано лише місяці першої покупки, усі
+-- клієнти яких мали 90 днів спостереження (перше замовлення <= 2018-08-29 - 90 днів)
+-- -> уникаємо правого цензурування.
 -- ---------------------------------------------------------------------
 WITH first_order AS (
     SELECT customer_unique_id, MIN(purchase_ts) AS first_ts
@@ -128,15 +128,15 @@ SELECT first_month,
        COUNT(*) FILTER (WHERE returned_90d)                       AS returned_within_90d,
        ROUND(100.0 * COUNT(*) FILTER (WHERE returned_90d) / COUNT(*), 2) AS repeat_rate_90d_pct
 FROM returned
-WHERE first_month BETWEEN DATE '2017-01-01' AND DATE '2018-05-01'   -- 2018-05 is the last month with full 90 days
+WHERE first_month BETWEEN DATE '2017-01-01' AND DATE '2018-05-01'   -- 2018-05 - останній місяць із повними 90 днями
 GROUP BY first_month
 ORDER BY first_month;
 
 -- ---------------------------------------------------------------------
--- C4.1: repeat rate by segment known AT THE FIRST ORDER
--- Outcome: customer placed any later order (strict repeat, whole history).
--- Customers who first bought after 2018-05-31 are excluded (< 90 days to return).
--- Groups with fewer than 300 customers are flagged.
+-- C4.1: частка повторних покупців за сегментом, відомим НА МОМЕНТ ПЕРШОГО ЗАМОВЛЕННЯ
+-- Результат: клієнт зробив будь-яке пізніше замовлення (строгий повтор, уся історія).
+-- Клієнтів, які вперше купили після 2018-05-31, виключено (< 90 днів на повернення).
+-- Групи з менш ніж 300 клієнтами позначено прапорцем.
 -- ---------------------------------------------------------------------
 DROP TABLE IF EXISTS tmp_first_order;
 CREATE TEMP TABLE tmp_first_order AS
@@ -144,7 +144,7 @@ WITH ranked AS (
     SELECT ob.*,
            ROW_NUMBER() OVER (PARTITION BY customer_unique_id ORDER BY purchase_ts, order_id) AS n
     FROM analytics.order_base ob
-), first_cat AS (          -- category with the largest revenue in the first order
+), first_cat AS (          -- категорія з найбільшою виручкою в першому замовленні
     SELECT order_id, category
     FROM (
         SELECT order_id, category,
@@ -173,7 +173,7 @@ LEFT JOIN first_cat fc ON fc.order_id = r.order_id
 WHERE r.n = 1
   AND r.purchase_ts < DATE '2018-06-01';
 
--- helper: one query per segment variable, same shape
+-- допоміжне: один запит на кожну змінну сегмента, однакова структура
 SELECT 'state' AS segment_type, customer_state AS segment,
        COUNT(*) AS customers, COUNT(*) FILTER (WHERE is_repeat) AS repeat_customers,
        ROUND(100.0 * COUNT(*) FILTER (WHERE is_repeat) / COUNT(*), 2) AS repeat_rate_pct,
@@ -201,7 +201,7 @@ SELECT 'first_review_score', COALESCE(first_review_score::text, 'no review'),
 FROM tmp_first_order GROUP BY first_review_score
 ORDER BY segment_type, repeat_rate_pct DESC;
 
--- first category: top 15 categories by number of first orders
+-- перша категорія: категорії з ≥ 300 клієнтами, за часткою повторних покупців
 SELECT first_category,
        COUNT(*) AS customers,
        COUNT(*) FILTER (WHERE is_repeat) AS repeat_customers,
@@ -211,8 +211,8 @@ GROUP BY first_category
 HAVING COUNT(*) >= 300
 ORDER BY repeat_rate_pct DESC;
 
--- Confounder check for "first delivery late vs on time":
--- compare the repeat rate WITHIN the 5 largest states
+-- Перевірка на змішувальний фактор для «перша доставка із запізненням vs вчасно»:
+-- порівнюємо частку повторних покупців ВСЕРЕДИНІ 5 найбільших штатів
 WITH big AS (
     SELECT customer_state FROM tmp_first_order
     GROUP BY customer_state ORDER BY COUNT(*) DESC LIMIT 5

@@ -1,21 +1,21 @@
 -- =====================================================================
 -- cohort_analysis.sql
--- Purpose : first-purchase-month cohorts and their retention over time
--- Answers : C1, C3 (over time)  ·  Notes: P2 - Cohort Analysis
--- Source  : analytics.order_base
---   Customer     = customer_unique_id
---   Order        = delivered order
---   Cohort month = month of the customer's first delivered order
---   month_number = months between cohort month and order month (0, 1, 2 ...)
---   Retention(k) = customers with an order in month k / cohort size
--- Cohorts shown: 2017-01 .. 2018-08 (2016 cohorts are tiny, < 350 customers).
--- Last observed month: 2018-08 -> newer cohorts have fewer observed months
--- (triangle). Unobserved cells are NULL, never 0.
+-- Мета    : когорти за місяцем першої покупки та їхнє утримання з часом
+-- Відповідає: C1, C3 (у динаміці)  ·  Нотатки: P2 - Cohort Analysis
+-- Джерело : analytics.order_base
+--   Клієнт       = customer_unique_id
+--   Замовлення   = доставлене замовлення
+--   Місяць когорти = місяць першого доставленого замовлення клієнта
+--   month_number = кількість місяців між місяцем когорти та місяцем замовлення (0, 1, 2 ...)
+--   Утримання(k) = клієнти із замовленням у місяці k / розмір когорти
+-- Показані когорти: 2017-01 .. 2018-08 (когорти 2016 дуже малі, < 350 клієнтів).
+-- Останній спостережуваний місяць: 2018-08 -> новіші когорти мають менше спостережуваних місяців
+-- (трикутник). Неспостережувані клітинки - NULL, ніколи не 0.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- CO.1 - CO.5: long table (cohort_month, month_number, active, size, retention)
--- Export: \copy (...) TO 'reports/tables/cohort_retention.csv' CSV HEADER
+-- CO.1 - CO.5: яке утримання кожної когорти по місяцях? Довга таблиця (cohort_month, month_number, активні, розмір, утримання)
+-- Експорт: \copy (...) TO 'reports/tables/cohort_retention.csv' CSV HEADER
 -- ---------------------------------------------------------------------
 DROP VIEW IF EXISTS analytics.cohort_retention;
 CREATE VIEW analytics.cohort_retention AS
@@ -48,7 +48,7 @@ JOIN cohort_size s USING (cohort_month)
 WHERE a.cohort_month BETWEEN DATE '2017-01-01' AND DATE '2018-08-01'
 GROUP BY a.cohort_month, a.month_number, s.cohort_size;
 
--- Test of the month difference on known dates (expected: 0, 1, 12, 13)
+-- Тест різниці в місяцях на відомих датах (очікується: 0, 1, 12, 13)
 SELECT (EXTRACT(YEAR FROM d2) - EXTRACT(YEAR FROM d1)) * 12
      + (EXTRACT(MONTH FROM d2) - EXTRACT(MONTH FROM d1)) AS month_number
 FROM (VALUES (DATE '2017-12-01', DATE '2017-12-01'),
@@ -59,9 +59,9 @@ FROM (VALUES (DATE '2017-12-01', DATE '2017-12-01'),
 SELECT * FROM analytics.cohort_retention ORDER BY cohort_month, month_number;
 
 -- ---------------------------------------------------------------------
--- CO.6: matrix, month 0 .. 12 (retention %)
--- Cells that cannot be observed yet (cohort_month + k > 2018-08) are NULL.
--- A cell that CAN be observed but had no returning customer is 0.
+-- CO.6: як виглядає матриця утримання за місяці 0 .. 12 (утримання %)?
+-- Клітинки, які ще неможливо спостерігати (cohort_month + k > 2018-08), - NULL.
+-- Клітинка, яку МОЖНА спостерігати, але без жодного повторного клієнта, - 0.
 -- ---------------------------------------------------------------------
 WITH sizes AS (
     SELECT DISTINCT cohort_month, cohort_size FROM analytics.cohort_retention
@@ -93,8 +93,8 @@ GROUP BY cohort_month, cohort_size
 ORDER BY cohort_month;
 
 -- ---------------------------------------------------------------------
--- CO1 / CO2: typical retention at month 1, 3, 6 across cohorts
--- Only cohorts that have that month observed; median across cohorts.
+-- CO1 / CO2: яке типове утримання на 1, 3, 6 місяць серед когорт?
+-- Лише когорти, для яких цей місяць спостережуваний; медіана по когортах.
 -- ---------------------------------------------------------------------
 WITH sizes AS (
     SELECT DISTINCT cohort_month FROM analytics.cohort_retention
@@ -116,8 +116,8 @@ GROUP BY month_number
 ORDER BY month_number;
 
 -- ---------------------------------------------------------------------
--- CO4: cumulative retention - % of a cohort that returned AT LEAST ONCE
--- in months 1..k (a later month; same-month repeats are not counted)
+-- CO4: кумулятивне утримання - який % когорти повернулася ХОЧА Б РАЗ
+-- у місяцях 1..k? (пізніший місяць; повторні покупки в тому ж місяці не враховуються)
 -- ---------------------------------------------------------------------
 WITH first_purchase AS (
     SELECT customer_unique_id, MIN(purchase_month) AS cohort_month

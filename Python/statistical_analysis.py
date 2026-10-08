@@ -1,9 +1,9 @@
 # %% [markdown]
-# # Statistical Analysis
-# **Answers:** D3, D4, D5, S1-S4 · Notes: P3 - Statistical Analysis
-# **Input:** `reports/tables/orders_clean.csv` (from `data_cleaning.py`)
-# **Population:** delivered orders purchased 2017-01 .. 2018-08 with a delivery date (same as `analytics.delivery_orders` in SQL)
-# **Definitions:** late = delivered date > estimated date · review score = latest review of the order
+# # Статистичний аналіз
+# **Відповідає на:** D3, D4, D5, S1-S4 · Нотатки: P3 - Статистичний аналіз
+# **Вхідні дані:** `reports/tables/orders_clean.csv` (з `data_cleaning.py`)
+# **Сукупність:** доставлені замовлення, оформлені 2017-01 .. 2018-08, з датою доставки (те саме, що `analytics.delivery_orders` у SQL)
+# **Визначення:** запізнення = дата доставки > очікуваної дати · оцінка відгуку = найновіший відгук на замовлення
 
 # %%
 import pandas as pd
@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent  # repository root, so the script runs from any working directory
+ROOT = Path(__file__).resolve().parent.parent  # корінь репозиторію, щоб скрипт запускався з будь-якої робочої директорії
 
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 160)
@@ -25,8 +25,8 @@ FIGS.mkdir(parents=True, exist_ok=True)
 from scipy import stats
 
 # %%
-# Chart style: recessive grid/axes, thin marks, text in neutral ink (never series colour)
-BLUE, ORANGE = "#2a78d6", "#eb6834"      # on-time / main series = blue, late = orange (validated pair)
+# Стиль графіків: ненав'язлива сітка/осі, тонкі позначки, текст нейтральним кольором (ніколи кольором серії)
+BLUE, ORANGE = "#2a78d6", "#eb6834"      # вчасно / основна серія = синій, із запізненням = помаранчевий (перевірена пара)
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e5e4e0"
 plt.rcParams.update({
     "figure.dpi": 110, "savefig.dpi": 200, "figure.facecolor": "white",
@@ -54,9 +54,9 @@ rng = np.random.default_rng(42)
 N_BOOT = 2000
 
 # %% [markdown]
-# ## Part A - Delivery time
-# ### A1. Distribution
-# **Question:** what is the shape of `delivery_days`?
+# ## Частина A - Час доставки
+# ### A1. Розподіл
+# **Питання:** яку форму має розподіл `delivery_days`?
 
 # %%
 x = dlv["delivery_days"].to_numpy()
@@ -79,11 +79,11 @@ fig.tight_layout()
 save(fig, "del_delivery_days_hist.png")
 
 # %% [markdown]
-# **Finding:** Delivery time is strongly right-skewed (skewness 3.85): mean 12.5 days vs median 10.2, p90 23.1, p99 46.0 days (96,203 delivered orders). The mean is pulled up by the long tail, so median and p90 are the right summary.
+# **Висновок:** Час доставки має сильну правосторонню асиметрію (коефіцієнт асиметрії 3.85): середнє 12.5 дня проти медіани 10.2, p90 23.1, p99 46.0 дня (96,203 доставлених замовлень). Довгий хвіст тягне середнє вгору, тому правильні підсумкові показники - медіана та p90.
 
 # %% [markdown]
-# ### A2. Bootstrap CIs for the median and p90
-# **Why bootstrap:** delivery time is strongly right-skewed and there is no simple formula for the CI of a 90th percentile. The bootstrap resamples the orders with replacement many times and looks at how much the statistic moves.
+# ### A2. Bootstrap CI для медіани та p90
+# **Чому bootstrap:** час доставки має сильну правосторонню асиметрію, і для CI 90-го перцентиля немає простої формули. Bootstrap багато разів робить вибірки замовлень із поверненням і дивиться, наскільки змінюється статистика.
 
 # %%
 def bootstrap_ci(values, stat_fn, n_boot=N_BOOT, level=0.95, rng=rng):
@@ -103,17 +103,17 @@ ci_table = pd.DataFrame(
 print(ci_table.round(2))
 
 # %%
-# Cross-check my own bootstrap with SciPy's implementation (median only - it is the slower one to vectorise)
+# Перехресна перевірка власного bootstrap реалізацією SciPy (лише медіана - її повільніше векторизувати)
 res = stats.bootstrap((x,), np.median, n_resamples=1000, confidence_level=0.95,
                       method="percentile", batch=50, rng=np.random.default_rng(7))
 print("SciPy percentile CI for the median:", np.round(res.confidence_interval, 2))
 
 # %% [markdown]
-# **Finding:** With 96k orders both estimates are precise: median 10.21 days (95% CI 10.17-10.26), p90 23.06 days (95% CI 22.93-23.17). SciPy's bootstrap gives the same interval for the median.
+# **Висновок:** Із 96k замовлень обидві оцінки точні: медіана 10.21 дня (95% CI 10.17-10.26), p90 23.06 дня (95% CI 22.93-23.17). Bootstrap від SciPy дає такий самий інтервал для медіани.
 
 # %% [markdown]
-# ### A3. The worst states, with CIs
-# **Question:** are the slowest states clearly different from the national value, or could it be noise? (States with >= 300 delivered orders; the 5 highest late rates.)
+# ### A3. Найгірші штати, з CI
+# **Питання:** чи найповільніші штати явно відрізняються від загальнонаціонального значення, чи це може бути шум? (Штати з >= 300 доставленими замовленнями; 5 найвищих часток запізнень.)
 
 # %%
 state_stats = (dlv.groupby("customer_state")
@@ -135,11 +135,11 @@ print(f"national: median {med:.1f} days, p90 {p90:.1f} days, late {100 * dlv['is
 print(worst_table.round(1))
 
 # %% [markdown]
-# **Finding:** The five states with the highest late rates (AL, MA, SE, PI, CE - all in the North-East) also have much longer deliveries: median 16-22 days and p90 30-40 days vs 10.2 / 23.1 nationally. Every CI lies far above the national value, so the difference is not sampling noise.
+# **Висновок:** П'ять штатів із найвищою часткою запізнень (AL, MA, SE, PI, CE - усі на Північному Сході) мають і значно довшу доставку: медіана 16-22 дні та p90 30-40 днів проти 10.2 / 23.1 по країні. Кожен CI лежить значно вище загальнонаціонального значення, тож різниця - не шум вибірки.
 
 # %% [markdown]
-# ## Part B - Review score: on-time vs late
-# ### B1. Describe before testing
+# ## Частина B - Оцінка відгуку: вчасно чи із запізненням
+# ### B1. Описати перед тестуванням
 
 # %%
 def describe_scores(s):
@@ -170,7 +170,7 @@ save(fig, "sat_review_distribution_on_time_vs_late.png")
 print(dist.round(1))
 
 # %% [markdown]
-# ### B2. Characteristics of the data -> choice of method
+# ### B2. Характеристики даних -> вибір методу
 
 # %%
 late_s = rev.loc[rev["status"] == "late", "review_score"].to_numpy()
@@ -185,19 +185,19 @@ print(pd.Series({
 }).round(3))
 
 # %% [markdown]
-# | Characteristic | What the data shows | Consequence |
+# | Характеристика | Що показують дані | Наслідок |
 # | --- | --- | --- |
-# | Scale | 1-5 stars, 5 distinct values -> **ordinal** | a mean difference is readable as "average stars", but medians can only jump between whole stars |
-# | Shape | on-time scores pile up at 5 (left-skewed); late scores are bimodal (many 1s, some 5s) | the normality assumption of a t-test does not hold for individual scores |
-# | Sample sizes | tens of thousands on-time, thousands late | large n -> by the Central Limit Theorem the **difference in means** is ~normal even though scores are not |
-# | Variances | very different between groups, group sizes very unequal | use **Welch's** t-test, never Student's |
-# | Independence | one row per order; only a small number of customers have several orders here | close enough to independent - stated as an assumption |
+# | Шкала | 1-5 зірок, 5 різних значень -> **порядкова** | різницю середніх можна читати як "середні зірки", але медіани можуть лише перескакувати між цілими зірками |
+# | Форма | оцінки вчасних замовлень скупчуються на 5 (лівостороння асиметрія); оцінки запізнілих - бімодальні (багато 1, частина 5) | припущення t-тесту про нормальність не виконується для окремих оцінок |
+# | Розміри вибірок | десятки тисяч вчасних, тисячі запізнілих | велике n -> за центральною граничною теоремою **різниця середніх** розподілена ~нормально, хоча самі оцінки - ні |
+# | Дисперсії | дуже різні між групами, розміри груп дуже нерівні | використовувати t-тест **Welch's**, ніколи не Стьюдента |
+# | Незалежність | один рядок на замовлення; лише невелика кількість клієнтів має тут кілька замовлень | достатньо близько до незалежності - зазначено як припущення |
 #
-# **Methods:** T1 bootstrap CI for the mean difference and T4 difference in % of 1-2 star reviews are the **primary** results (both in business units). T2 Welch, T3 Mann-Whitney and T5 effect sizes are supporting checks.
-# **Reviews written before delivery** are kept in the primary analysis (for late orders they often *are* the complaint about waiting) and removed in a sensitivity check (C4).
+# **Методи:** T1 bootstrap CI для різниці середніх і T4 різниця у % відгуків з 1-2 зірками - **основні** результати (обидва в бізнесових одиницях). T2 Welch, T3 Mann-Whitney і T5 розміри ефекту - допоміжні перевірки.
+# **Відгуки, написані до доставки,** залишено в основному аналізі (для запізнілих замовлень вони часто *і є* скаргою на очікування) і вилучено в перевірці чутливості (C4).
 
 # %% [markdown]
-# ### T1. Bootstrap 95% CI for the difference in mean score (late - on time)
+# ### T1. Bootstrap 95% CI для різниці середньої оцінки (із запізненням - вчасно)
 
 # %%
 def bootstrap_diff(a, b, stat_fn=np.mean, n_boot=5000, rng=rng):
@@ -219,16 +219,16 @@ print(f"t = {t2.statistic:.2f}, df = {t2.df:.0f}, p = {t2.pvalue:.3g}")
 print(f"Welch 95% CI for the mean difference: [{ci_welch.low:.3f}, {ci_welch.high:.3f}]")
 
 # %% [markdown]
-# ### T3. Mann-Whitney U (rank-based)
-# Tests whether a random late-order score tends to be lower than a random on-time score. Suits ordinal data; with only 5 values there are many ties, which SciPy handles with a tie-corrected normal approximation.
+# ### T3. Mann-Whitney U (на основі рангів)
+# Перевіряє, чи має випадкова оцінка запізнілого замовлення тенденцію бути нижчою за випадкову оцінку вчасного. Підходить для порядкових даних; лише з 5 значеннями є багато однакових рангів, які SciPy обробляє нормальною апроксимацією з поправкою на зв'язки.
 
 # %%
 t3 = stats.mannwhitneyu(late_s, ontime_s, alternative="two-sided", method="asymptotic")
-rank_biserial = 2 * t3.statistic / (len(late_s) * len(ontime_s)) - 1     # -1..1, negative = late scores lower
+rank_biserial = 2 * t3.statistic / (len(late_s) * len(ontime_s)) - 1     # -1..1, від'ємне = оцінки запізнілих нижчі
 print(f"U = {t3.statistic:,.0f}, p = {t3.pvalue:.3g}, rank-biserial correlation = {rank_biserial:.3f}")
 
 # %% [markdown]
-# ### T4. Difference in % of 1-2 star reviews, with a 95% CI
+# ### T4. Різниця у % відгуків з 1-2 зірками, з 95% CI
 
 # %%
 low_late, low_ontime = (late_s <= 2), (ontime_s <= 2)
@@ -242,7 +242,7 @@ print(f"difference {100*(p1-p2):.1f} pp | normal-approx 95% CI [{100*wald[0]:.1f
 print(f"relative risk of a 1-2 star review: {p1 / p2:.1f}x")
 
 # %% [markdown]
-# ### T5. Effect size
+# ### T5. Розмір ефекту
 
 # %%
 pooled_sd = np.sqrt(((len(late_s) - 1) * late_s.var(ddof=1) + (len(ontime_s) - 1) * ontime_s.var(ddof=1))
@@ -262,11 +262,11 @@ results = pd.DataFrame([
 print(results)
 
 # %% [markdown]
-# **Finding (B):** Late orders score **2.02 stars lower** on average (2.27 vs 4.29; 95% CI -2.06 to -1.98). 62.4% of late orders get 1-2 stars vs 9.2% of on-time orders: **+53.2 percentage points** (95% CI 51.9-54.4), 6.7x as likely. Welch and Mann-Whitney p-values are below any printable precision; the effect is large (Cohen's d -1.71, rank-biserial -0.64).
+# **Висновок (B):** Запізнілі замовлення в середньому отримують оцінку на **2.02 зірки нижчу** (2.27 проти 4.29; 95% CI від -2.06 до -1.98). 62.4% запізнілих замовлень отримують 1-2 зірки проти 9.2% вчасних: **+53.2 процентного пункту** (95% CI 51.9-54.4), у 6.7x разів імовірніше. p-значення Welch і Mann-Whitney нижчі за будь-яку виведену точність; ефект великий (Cohen's d -1.71, rank-biserial -0.64).
 
 # %% [markdown]
-# ## Part C - Robustness
-# ### C1. Is it just geography? The gap within the 5 largest states
+# ## Частина C - Стійкість
+# ### C1. Чи це лише географія? Розрив усередині 5 найбільших штатів
 
 # %%
 big_states = rev["customer_state"].value_counts().head(5).index
@@ -282,10 +282,10 @@ within = pd.DataFrame(rows).set_index("state")
 print(within.round(3))
 
 # %% [markdown]
-# **Finding:** The gap is present inside each of the 5 largest states, from -1.63 stars (PR) to -2.33 (RJ), and no CI includes 0. Geography alone does not explain the association.
+# **Висновок:** Розрив є всередині кожного з 5 найбільших штатів, від -1.63 зірки (PR) до -2.33 (RJ), і жоден CI не містить 0. Сама лише географія не пояснює цей зв'язок.
 
 # %% [markdown]
-# ### C2. Does the gap grow with the size of the delay? (dose-response)
+# ### C2. Чи зростає розрив разом із тривалістю затримки? (доза-відповідь)
 
 # %%
 BUCKETS = [-np.inf, -10, -1, 0, 3, 7, np.inf]
@@ -311,10 +311,10 @@ fig.tight_layout()
 save(fig, "sat_low_reviews_by_delay.png")
 
 # %% [markdown]
-# **Finding:** A clear dose-response pattern: 1-2 star share is 9% for orders 10+ days early, 12% on the promised day, 32% at 1-3 days late, 68% at 4-7 days late and 79% at 8+ days late.
+# **Висновок:** Чітка залежність доза-відповідь: частка 1-2 зірок становить 9% для замовлень, доставлених на 10+ днів раніше, 12% - у обіцяний день, 32% - при запізненні на 1-3 дні, 68% - на 4-7 днів і 79% - на 8+ днів.
 
 # %% [markdown]
-# ### C3. What share of all 1-2 star reviews come from late orders?
+# ### C3. Яка частка всіх відгуків з 1-2 зірками припадає на запізнілі замовлення?
 
 # %%
 low = rev[rev["review_score"] <= 2]
@@ -324,7 +324,7 @@ print(f"late orders are {100*share_late_overall:.1f}% of reviewed orders "
       f"but {100*share_late_in_low:.1f}% of all 1-2 star reviews")
 
 # %% [markdown]
-# ### C4. Sensitivity: remove reviews written before the order arrived
+# ### C4. Чутливість: вилучити відгуки, написані до отримання замовлення
 
 # %%
 rev2 = rev[~rev["review_before_delivery"].astype(bool)]
@@ -335,15 +335,15 @@ print(f"removed {len(rev) - len(rev2):,} reviews; late n={len(a2):,}, on-time n=
 print(f"mean difference {est2[0]:.3f}, 95% CI [{est2[1]:.3f}, {est2[2]:.3f}]")
 
 # %% [markdown]
-# **Finding (C3, C4):**
-# Late orders are 6.7% of reviewed orders but **32.6% of all 1-2 star reviews**.
-# **Sensitivity:** removing the 4,970 reviews written before the order arrived removes most late-order reviews (late n falls from 6,378 to 1,629). The gap shrinks from -2.02 to **-0.77 stars (95% CI -0.84 to -0.69)** but stays clearly negative. So a large part of the headline gap comes from customers reviewing *while still waiting* - the dissatisfaction is about the delay itself; customers who review after a late delivery are still ~0.8 stars less satisfied.
+# **Висновок (C3, C4):**
+# Запізнілі замовлення становлять 6.7% замовлень із відгуками, але **32.6% усіх відгуків з 1-2 зірками**.
+# **Чутливість:** вилучення 4,970 відгуків, написаних до отримання замовлення, прибирає більшість відгуків на запізнілі замовлення (n запізнілих падає з 6,378 до 1,629). Розрив зменшується з -2.02 до **-0.77 зірки (95% CI від -0.84 до -0.69)**, але залишається явно від'ємним. Отже, значна частина основного розриву походить від клієнтів, які пишуть відгук *ще під час очікування* - незадоволення стосується самої затримки; клієнти, які пишуть відгук після запізнілої доставки, все одно задоволені на ~0.8 зірки менше.
 
 # %% [markdown]
-# ## Part D - What this does and does not prove
+# ## Частина D - Що це доводить і чого не доводить
 #
-# 1. **The 95% CI** (-2.06 to -1.98 stars): if we repeated the sampling many times, 95% of intervals built this way would contain the true difference in mean score between late and on-time orders. It is narrow because the samples are large.
-# 2. **What it shows:** in this data, late delivery is strongly **associated** with lower review scores; the association is large, far beyond sampling noise, present within every large state, grows with the size of the delay, and survives removing reviews written before delivery (smaller, -0.77 stars).
-# 3. **What it does NOT show:** that late delivery *causes* lower scores, or that cutting late deliveries would raise the average score by 2 stars. Customers who never left a review are not represented.
-# 4. **Uncontrolled confounders:** product category, seller, product price/size, distance and freight cost, and the carrier - any of these can be linked to both lateness and satisfaction.
-# 5. **Verdict on the hypothesis "late deliveries are associated with lower review scores": supported.** The size of the effect depends on when the review was written (-2.0 stars overall, -0.8 stars for reviews written after delivery).
+# 1. **95% CI** (від -2.06 до -1.98 зірки): якби ми багато разів повторили вибірку, 95% інтервалів, побудованих таким чином, містили б справжню різницю середньої оцінки між запізнілими та вчасними замовленнями. Він вузький, бо вибірки великі.
+# 2. **Що це показує:** у цих даних запізніла доставка сильно **пов'язана** з нижчими оцінками відгуків; зв'язок великий, значно перевищує шум вибірки, присутній у кожному великому штаті, зростає з тривалістю затримки і зберігається після вилучення відгуків, написаних до доставки (менший, -0.77 зірки).
+# 3. **Чого це НЕ показує:** що запізніла доставка *спричиняє* нижчі оцінки або що скорочення запізнень підвищить середню оцінку на 2 зірки. Клієнти, які ніколи не залишали відгуків, не представлені.
+# 4. **Неконтрольовані змішувальні чинники:** категорія товару, продавець, ціна/розмір товару, відстань і вартість доставки, а також перевізник - будь-що з цього може бути пов'язане і з запізненням, і з задоволеністю.
+# 5. **Вердикт щодо гіпотези "запізнілі доставки пов'язані з нижчими оцінками відгуків": підтверджено.** Розмір ефекту залежить від того, коли написано відгук (-2.0 зірки загалом, -0.8 зірки для відгуків, написаних після доставки).
