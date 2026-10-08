@@ -1,7 +1,7 @@
 # %% [markdown]
-# # Figures from the SQL results
-# **Purpose:** the README figures for the revenue, retention and delivery questions (Figures Checklist 2, 3, 4, 8, 11).
-# **Input:** CSVs exported by `SQL/99_export_tables.sql` (`order_base.csv`, `item_base.csv`, `cohort_retention.csv`, `delivery_orders.csv`). All numbers come from the SQL views - this script only draws them.
+# # Графіки за результатами SQL
+# **Мета:** графіки для README з питань виручки, утримання та доставки (Figures Checklist 2, 3, 4, 8, 11).
+# **Вхідні дані:** CSV, експортовані `SQL/99_export_tables.sql` (`order_base.csv`, `item_base.csv`, `cohort_retention.csv`, `delivery_orders.csv`). Усі числа беруться з SQL-представлень - цей скрипт лише їх візуалізує.
 
 # %%
 import pandas as pd
@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent  # repository root, so the script runs from any working directory
+ROOT = Path(__file__).resolve().parent.parent  # корінь репозиторію, щоб скрипт запускався з будь-якої робочої директорії
 
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 160)
@@ -22,8 +22,8 @@ TABLES.mkdir(parents=True, exist_ok=True)
 FIGS.mkdir(parents=True, exist_ok=True)
 
 # %%
-# Chart style: recessive grid/axes, thin marks, text in neutral ink (never series colour)
-BLUE, ORANGE = "#2a78d6", "#eb6834"      # on-time / main series = blue, late = orange (validated pair)
+# Стиль графіків: ненав'язливі сітка/осі, тонкі елементи, текст нейтральним кольором (ніколи не кольором ряду)
+BLUE, ORANGE = "#2a78d6", "#eb6834"      # вчасно / основний ряд = синій, запізнення = помаранчевий (перевірена пара)
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e5e4e0"
 plt.rcParams.update({
     "figure.dpi": 110, "savefig.dpi": 200, "figure.facecolor": "white",
@@ -41,7 +41,7 @@ def save(fig, name):
     plt.close(fig)
 
 # %%
-# PostgreSQL writes booleans as t / f -> tell pandas
+# PostgreSQL записує булеві значення як t / f -> повідомляємо про це pandas
 BOOL = dict(true_values=["t"], false_values=["f"])
 ob = pd.read_csv(TABLES / "order_base.csv", parse_dates=["purchase_month"], **BOOL)
 ib = pd.read_csv(TABLES / "item_base.csv", parse_dates=["purchase_month"], **BOOL)
@@ -53,7 +53,7 @@ monthly["aov"] = monthly["revenue"] / monthly["orders"]
 print(monthly.tail())
 
 # %% [markdown]
-# ## Figure 2 - Monthly revenue (R1)
+# ## Графік 2 - Щомісячна виручка (R1)
 
 # %%
 fig, ax = plt.subplots(figsize=(10, 3.8))
@@ -68,11 +68,11 @@ fig.tight_layout()
 save(fig, "rev_monthly_trend.png")
 
 # %% [markdown]
-# ## Figure 3 - Orders vs AOV (R2, R3)
-# Two panels with their own axes instead of one dual-axis chart: orders and AOV have different units.
+# ## Графік 3 - Замовлення проти AOV (R2, R3)
+# Дві панелі з власними осями замість одного графіка з двома осями Y: замовлення і AOV мають різні одиниці виміру.
 
 # %%
-idx = monthly / monthly.iloc[0] * 100      # index: Jan 2017 = 100
+idx = monthly / monthly.iloc[0] * 100      # індекс: січень 2017 = 100
 fig, axes = plt.subplots(1, 2, figsize=(11, 3.6), sharex=True)
 axes[0].bar(monthly.index, monthly["orders"], width=20, color=BLUE)
 axes[0].set_title("Orders per month moved a lot ...")
@@ -92,7 +92,7 @@ print("orders: min", monthly["orders"].min(), "max", monthly["orders"].max(),
       "| AOV: min", round(monthly["aov"].min(), 2), "max", round(monthly["aov"].max(), 2))
 
 # %% [markdown]
-# ## Figure 4 - Revenue by category, top 10 (R4)
+# ## Графік 4 - Виручка за категоріями, топ-10 (R4)
 
 # %%
 cat = ib[ib["in_kpi_period"]].groupby("category")["item_revenue"].sum().sort_values(ascending=False)
@@ -109,19 +109,19 @@ fig.tight_layout()
 save(fig, "rev_top_categories.png")
 
 # %% [markdown]
-# ## Figure 8 - Cohort retention heatmap (C1, C3)
+# ## Графік 8 - Теплова карта утримання когорт (C1, C3)
 
 # %%
 matrix = cohort.pivot(index="cohort_month", columns="month_number", values="retention_pct")
 last_month = pd.Timestamp("2018-08-01")
-for cm in matrix.index:                       # observable but empty cells = 0, unobservable = NaN
+for cm in matrix.index:                       # спостережувані, але порожні клітинки = 0, неспостережувані = NaN
     for k in matrix.columns:
         observable = cm + pd.DateOffset(months=int(k)) <= last_month
         if observable and pd.isna(matrix.loc[cm, k]):
             matrix.loc[cm, k] = 0
         if not observable:
             matrix.loc[cm, k] = np.nan
-m = matrix.loc[:, 1:12]                       # month 0 is 100% by definition
+m = matrix.loc[:, 1:12]                       # місяць 0 за визначенням дорівнює 100%
 fig, ax = plt.subplots(figsize=(10, 5.5))
 im = ax.imshow(m.values, cmap="Blues", aspect="auto", vmin=0, vmax=0.8)
 ax.set_xticks(range(m.shape[1]), m.columns)
@@ -142,7 +142,7 @@ fig.tight_layout()
 save(fig, "ret_cohort_heatmap.png")
 
 # %% [markdown]
-# ## Figure 11 - Late % by state (D2)
+# ## Графік 11 - Частка запізнень за штатами, % (D2)
 
 # %%
 st = dl.groupby("customer_state").agg(orders=("order_id", "size"), late=("is_late", "mean"))

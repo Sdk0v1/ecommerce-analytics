@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Downloads the Olist CSVs into data/raw/ (skips files that already exist).
-# Source: Olist's own public copy of the dataset on GitHub
-# (https://github.com/olist/work-at-olist-data) - identical row counts to the Kaggle version.
-# The raw data is not committed to this repository (licence CC BY-NC-SA 4.0).
+# Завантажує CSV Olist у data/raw/ (пропускає файли, які вже існують).
+# Джерело: власна публічна копія датасету від Olist на GitHub
+# (https://github.com/olist/work-at-olist-data) - кількість рядків ідентична версії з Kaggle.
+# Сирі дані не комітяться в цей репозиторій (ліцензія CC BY-NC-SA 4.0).
 set -euo pipefail
 
 BASE="https://raw.githubusercontent.com/olist/work-at-olist-data/master/datasets"

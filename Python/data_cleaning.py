@@ -1,21 +1,21 @@
 # %% [markdown]
-# # Data Cleaning & SQL Validation
-# **Answers:** data-quality checks (P1 - Data Quality Report) and validation of the SQL results
-# **Input:** the raw Olist CSVs in `data/raw/` - on purpose *not* the PostgreSQL views, so this is an independent second calculation
-# **Output:** `reports/tables/orders_clean.csv`, `reports/tables/items_clean.csv` (used by the RFM and statistics scripts) and the validation table
+# # Очищення даних і валідація SQL
+# **Відповідає на:** перевірки якості даних (P1 - Data Quality Report) і валідацію результатів SQL
+# **Вхідні дані:** сирі CSV Olist у `data/raw/` - навмисно *не* представлення PostgreSQL, тож це незалежний другий розрахунок
+# **Результат:** `reports/tables/orders_clean.csv`, `reports/tables/items_clean.csv` (використовуються скриптами RFM і статистичного аналізу) та таблиця валідації
 #
-# **Definitions** (identical to `SQL/01_analytics_views.sql`):
+# **Визначення** (ідентичні до `SQL/01_analytics_views.sql`):
 #
-# | Term | Definition |
+# | Термін | Визначення |
 # | --- | --- |
-# | Order | order with `order_status = 'delivered'` |
-# | Revenue | `price + freight_value` summed over the order's items |
-# | AOV | revenue / orders |
-# | Customer | `customer_unique_id` |
-# | KPI period | purchase month 2017-01 .. 2018-08 |
-# | Delivery days | delivered-to-customer minus purchase timestamp, in fractional days |
-# | Late | delivered **date** > estimated delivery **date** |
-# | Review score | latest review of the order (by answer timestamp) |
+# | Замовлення | замовлення з `order_status = 'delivered'` |
+# | Виручка | `price + freight_value`, підсумовані за позиціями замовлення |
+# | AOV | виручка / замовлення |
+# | Клієнт | `customer_unique_id` |
+# | KPI-період | місяць покупки 2017-01 .. 2018-08 |
+# | Дні доставки | час доставки клієнту мінус час покупки, у дробових днях |
+# | Запізнення | **дата** доставки > очікувана **дата** доставки |
+# | Оцінка відгуку | останній відгук на замовлення (за часом відповіді) |
 
 # %%
 import pandas as pd
@@ -23,7 +23,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent  # repository root, so the script runs from any working directory
+ROOT = Path(__file__).resolve().parent.parent  # корінь репозиторію, щоб скрипт запускався з будь-якої робочої директорії
 
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 160)
@@ -36,8 +36,8 @@ TABLES.mkdir(parents=True, exist_ok=True)
 FIGS.mkdir(parents=True, exist_ok=True)
 
 # %% [markdown]
-# ## A1. Load all tables
-# **Question:** do the shapes match the row counts loaded into PostgreSQL?
+# ## A1. Завантаження всіх таблиць
+# **Питання:** чи збігаються розміри таблиць із кількістю рядків, завантажених у PostgreSQL?
 
 # %%
 FILES = {
@@ -50,7 +50,7 @@ FILES = {
     "reviews":              "olist_order_reviews_dataset.csv",
     "category_translation": "product_category_name_translation.csv",
 }
-# ids are labels, not numbers -> read them as strings (keeps leading zeros in zip prefixes)
+# id - це мітки, а не числа -> читаємо їх як рядки (зберігає початкові нулі в поштових префіксах)
 ID_COLS = ["order_id", "customer_id", "customer_unique_id", "product_id", "seller_id",
            "review_id", "customer_zip_code_prefix", "seller_zip_code_prefix"]
 
@@ -69,11 +69,11 @@ shapes["match"] = shapes["rows"] == shapes["expected_rows"]
 print(shapes)
 
 # %% [markdown]
-# **Finding:** All 8 tables load with exactly the expected number of rows and columns (orders 99,441 · items 112,650 · customers 99,441 · products 32,951 · sellers 3,095 · payments 103,886 · reviews 99,224 · translations 71).
+# **Висновок:** Усі 8 таблиць завантажуються з точно очікуваною кількістю рядків і стовпців (orders 99,441 · items 112,650 · customers 99,441 · products 32,951 · sellers 3,095 · payments 103,886 · reviews 99,224 · translations 71).
 
 # %% [markdown]
-# ## A2. Datetime conversion
-# **Question:** how many values become `NaT` after `pd.to_datetime(errors='coerce')`? `coerce` silently turns bad strings into `NaT`, so the count of new `NaT`s must be compared with the count of empty strings before conversion.
+# ## A2. Перетворення дат і часу
+# **Питання:** скільки значень стають `NaT` після `pd.to_datetime(errors='coerce')`? `coerce` мовчки перетворює некоректні рядки на `NaT`, тому кількість нових `NaT` треба порівняти з кількістю порожніх значень до перетворення.
 
 # %%
 DATE_COLS = {
@@ -94,16 +94,16 @@ for table, cols in DATE_COLS.items():
 print(pd.DataFrame(rows))
 
 # %%
-# Does the estimated delivery date ever have a time part? (decides DATE vs TIMESTAMP comparison)
+# Чи буває в очікуваній даті доставки часова частина? (визначає порівняння на рівні DATE чи TIMESTAMP)
 est = dfs["orders"]["order_estimated_delivery_date"]
 print("estimated dates with a time other than 00:00:00:", (est != est.dt.normalize()).sum())
 
 # %% [markdown]
-# **Finding:** No date string failed to parse: every NaT was already an empty field. `order_estimated_delivery_date` always has time 00:00:00, so it is a date in practice - lateness is compared on the DATE level.
+# **Висновок:** Усі рядки з датами успішно розпарсено: кожен NaT уже був порожнім полем. `order_estimated_delivery_date` завжди має час 00:00:00, тож на практиці це дата - запізнення порівнюється на рівні DATE.
 
 # %% [markdown]
-# ## A3. Missing values
-# **Question:** which columns have missing values, and are they expected?
+# ## A3. Пропущені значення
+# **Питання:** у яких стовпцях є пропущені значення і чи очікувані вони?
 
 # %%
 missing = []
@@ -115,7 +115,7 @@ missing = pd.DataFrame(missing).sort_values(["table", "missing"], ascending=[Tru
 print(missing)
 
 # %%
-# Are missing delivery dates explained by the order status?
+# Чи пояснюються пропущені дати доставки статусом замовлення?
 o = dfs["orders"]
 print((o.assign(no_customer_delivery=o["order_delivered_customer_date"].isna())
    .groupby("order_status")["no_customer_delivery"].agg(["size", "sum"])
@@ -123,11 +123,11 @@ print((o.assign(no_customer_delivery=o["order_delivered_customer_date"].isna())
    .sort_values("orders", ascending=False)))
 
 # %% [markdown]
-# **Finding:** Missing delivery dates are explained by the order status: only 8 of 96,478 delivered orders lack a customer delivery date. 610 products (1.9%) have no category -> reported as 'unknown'. Review comments are mostly empty (59% without a message) and are not used.
+# **Висновок:** Пропущені дати доставки пояснюються статусом замовлення: лише 8 із 96,478 доставлених замовлень не мають дати доставки клієнту. 610 товарів (1.9%) не мають категорії -> позначаються як 'unknown'. Коментарі до відгуків здебільшого порожні (59% без повідомлення) і не використовуються.
 
 # %% [markdown]
-# ## A4. Duplicates
-# **Question:** are there exact duplicate rows or duplicate keys?
+# ## A4. Дублікати
+# **Питання:** чи є точні дублікати рядків або дублікати ключів?
 
 # %%
 KEYS = {
@@ -142,7 +142,7 @@ print(pd.DataFrame({
 }))
 
 # %%
-# review_id is not unique: what do the duplicated review_ids look like?
+# review_id не унікальний: як виглядають дубльовані review_id?
 r = dfs["reviews"]
 dup_ids = r[r["review_id"].duplicated(keep=False)]
 print("rows with a duplicated review_id:", len(dup_ids))
@@ -151,11 +151,11 @@ print("same review_id, different order_id:",
       (dup_ids.groupby("review_id")["order_id"].nunique() > 1).sum())
 
 # %% [markdown]
-# **Finding:** No exact duplicate rows and no duplicate keys - except `review_id`: 789 review ids appear on two different orders (1,603 rows). `review_id` is therefore not used as a key; reviews are attached to orders by `order_id`.
+# **Висновок:** Немає ні точних дублікатів рядків, ні дублікатів ключів - крім `review_id`: 789 id відгуків трапляються у двох різних замовленнях (1,603 рядки). Тому `review_id` не використовується як ключ; відгуки прив'язуються до замовлень через `order_id`.
 
 # %% [markdown]
-# ## A5. Timestamp consistency
-# **Question:** how many delivered orders violate purchase <= approved <= carrier <= customer delivery?
+# ## A5. Узгодженість часових міток
+# **Питання:** скільки доставлених замовлень порушують порядок покупка <= підтвердження <= передача перевізнику <= доставка клієнту?
 
 # %%
 d = dfs["orders"].query("order_status == 'delivered'")
@@ -170,11 +170,11 @@ checks = {
 print(pd.Series(checks, name="delivered_orders_affected").to_frame())
 
 # %% [markdown]
-# **Finding:** No delivered order arrives before it was bought, so total delivery time is always valid. Intermediate timestamps are less reliable (165 orders handed to the carrier before purchase, 1,350 before approval, 23 delivered before carrier pickup) -> the analysis uses only purchase -> customer delivery, not the seller/carrier split.
+# **Висновок:** Жодне доставлене замовлення не прибуває раніше, ніж його купили, тож загальний час доставки завжди коректний. Проміжні часові мітки менш надійні (165 замовлень передано перевізнику до покупки, 1,350 - до підтвердження, 23 доставлено ще до того, як їх забрав перевізник) -> аналіз використовує лише інтервал покупка -> доставка клієнту, без розбиття на етапи продавця/перевізника.
 
 # %% [markdown]
-# ## A6. Delivery duration outliers
-# **Question:** what do the median, p90, p99 and extreme values look like?
+# ## A6. Викиди в тривалості доставки
+# **Питання:** якими є медіана, p90, p99 та екстремальні значення?
 
 # %%
 delivery_days = (d["order_delivered_customer_date"] - d["order_purchase_timestamp"]).dt.total_seconds() / 86400
@@ -182,11 +182,11 @@ print(delivery_days.describe(percentiles=[.5, .9, .99]).round(2))
 print("orders taking more than 60 days:", (delivery_days > 60).sum())
 
 # %% [markdown]
-# **Finding:** Median delivery 10.2 days, p90 23.1, p99 46.1, max 209.6. 306 orders took more than 60 days. They are kept: they are plausible long-tail deliveries, not impossible values, and the median/p90 are robust to them.
+# **Висновок:** Медіана доставки 10.2 дня, p90 23.1, p99 46.1, максимум 209.6. 306 замовлень доставлялися понад 60 днів. Їх залишено: це правдоподібні доставки з довгого хвоста, а не неможливі значення, і медіана/p90 стійкі до них.
 
 # %% [markdown]
-# ## A7. Multiple reviews per order
-# **Question:** how many orders have more than one review? **Rule:** keep the latest review (by `review_answer_timestamp`, then `review_creation_date`, then `review_id`) - the same rule as the SQL view.
+# ## A7. Кілька відгуків на одне замовлення
+# **Питання:** скільки замовлень мають більше одного відгуку? **Правило:** залишаємо останній відгук (за `review_answer_timestamp`, потім `review_creation_date`, потім `review_id`) - те саме правило, що й у SQL-представленні.
 
 # %%
 reviews_per_order = dfs["reviews"].groupby("order_id").size()
@@ -204,11 +204,11 @@ last_review = (dfs["reviews"]
 print("orders with a review after applying the rule:", len(last_review))
 
 # %% [markdown]
-# **Finding:** 547 orders have more than one review and 202 of them have different scores, so the rule matters. After keeping the latest review, 98,673 orders have exactly one review.
+# **Висновок:** 547 замовлень мають більше одного відгуку, і у 202 з них оцінки різні, тож правило має значення. Після залишення останнього відгуку 98,673 замовлення мають рівно один відгук.
 
 # %% [markdown]
-# ## A8. Reviews written before the order arrived
-# **Question:** how many reviews were created before the actual delivery date? Such a review cannot describe the delivered product - but it can describe the waiting.
+# ## A8. Відгуки, написані до прибуття замовлення
+# **Питання:** скільки відгуків створено до фактичної дати доставки? Такий відгук не може описувати доставлений товар - але може описувати очікування.
 
 # %%
 rv = d[["order_id", "order_delivered_customer_date", "order_estimated_delivery_date"]].merge(last_review, on="order_id")
@@ -219,11 +219,11 @@ print(rv.groupby("is_late")["review_before_delivery"].agg(["size", "sum", "mean"
     columns={"size": "reviews", "sum": "before_delivery", "mean": "share"}))
 
 # %% [markdown]
-# **Finding:** 4,976 reviews were written before the order arrived - and almost all of them belong to late orders: 74.5% of late orders' reviews (4,751 of 6,381) vs 0.3% of on-time ones. For late orders the review is mostly a reaction to the waiting. This is tested as a sensitivity check in `statistical_analysis.py` (C4).
+# **Висновок:** 4,976 відгуків написано до прибуття замовлення - і майже всі вони стосуються запізнілих замовлень: 74.5% відгуків на запізнілі замовлення (4,751 з 6,381) проти 0.3% на вчасні. Для запізнілих замовлень відгук здебільшого є реакцією на очікування. Це перевіряється як аналіз чутливості в `statistical_analysis.py` (C4).
 
 # %% [markdown]
-# ## A9. Clean order-level and item-level tables with flags
-# All delivered orders are kept; flags make every filter visible and reversible.
+# ## A9. Очищені таблиці на рівні замовлень і позицій із прапорцями
+# Усі доставлені замовлення залишено; прапорці роблять кожен фільтр видимим і зворотним.
 
 # %%
 o, c, it, p = dfs["orders"], dfs["customers"], dfs["order_items"], dfs["payments"]
@@ -264,7 +264,7 @@ KEEP = ["order_id", "customer_unique_id", "customer_state", "order_purchase_time
 orders_clean = orders_clean[KEEP]
 print(orders_clean.shape, "| duplicated order_id:", orders_clean["order_id"].duplicated().sum())
 
-# item level with English category names (untranslated names kept, empty -> 'unknown')
+# рівень позицій з англійськими назвами категорій (неперекладені назви залишаються, порожні -> 'unknown')
 pr, tr = dfs["products"], dfs["category_translation"]
 items_clean = (it.merge(pr[["product_id", "product_category_name"]], on="product_id", how="left")
                  .merge(tr, on="product_category_name", how="left"))
@@ -281,7 +281,7 @@ print(items_clean.shape)
 orders_clean.to_csv(TABLES / "orders_clean.csv", index=False)
 items_clean.to_csv(TABLES / "items_clean.csv", index=False)
 
-# rows excluded from each analysis
+# рядки, виключені з кожного аналізу
 print(pd.Series({
     "all orders": len(o),
     "excluded: not delivered": (o["order_status"] != "delivered").sum(),
@@ -292,8 +292,8 @@ print(pd.Series({
 }, name="orders").to_frame())
 
 # %% [markdown]
-# ## B. Validation: SQL vs Python
-# **Question:** do the headline numbers calculated in PostgreSQL (`reports/tables/sql_headline_numbers.csv`, written by `SQL/99_export_tables.sql`) match the numbers calculated here from the raw CSVs?
+# ## B. Валідація: SQL проти Python
+# **Питання:** чи збігаються ключові показники, розраховані в PostgreSQL (`reports/tables/sql_headline_numbers.csv`, створюється `SQL/99_export_tables.sql`), з показниками, розрахованими тут із сирих CSV?
 
 # %%
 kpi = orders_clean[orders_clean["in_kpi_period"]]
@@ -309,7 +309,7 @@ python_values = {
     "repeat_rate_pct":      100 * (per_customer >= 2).mean(),
     "top_category_revenue": items_clean[items_clean["in_kpi_period"]].groupby("category")["item_revenue"].sum().max(),
     "on_time_pct":          100 * (1 - dlv["is_late"]).mean(),
-    "median_delivery_days": dlv["delivery_days"].median(),        # linear interpolation = PERCENTILE_CONT
+    "median_delivery_days": dlv["delivery_days"].median(),        # лінійна інтерполяція = PERCENTILE_CONT
     "p90_delivery_days":    dlv["delivery_days"].quantile(0.9),
     "revenue_2017_11":      orders_clean.loc[orders_clean["purchase_month"] == "2017-11-01", "revenue"].sum(),
 }
@@ -326,7 +326,7 @@ else:
 print(validation)
 
 # %%
-# Monthly KPIs: compare every month, not only the totals
+# Щомісячні KPI: порівнюємо кожен місяць, а не лише підсумки
 sql_monthly_file = TABLES / "monthly_kpis.csv"
 if sql_monthly_file.exists():
     sql_monthly = pd.read_csv(sql_monthly_file, parse_dates=["month"]).set_index("month")
@@ -337,8 +337,8 @@ if sql_monthly_file.exists():
     print("max absolute revenue difference:", (cmp["revenue_python"] - cmp["revenue_sql"]).abs().max().round(4))
 
 # %% [markdown]
-# ## Validation gate
-# This cell stops the script (and the CI run) with an error if any SQL number differs from the Python number.
+# ## Контрольна перевірка валідації
+# Ця комірка зупиняє скрипт (і запуск CI) з помилкою, якщо будь-яке число з SQL відрізняється від числа з Python.
 
 # %%
 if "match" in validation.columns:
@@ -349,8 +349,8 @@ else:
     print("SQL exports not found - validation skipped")
 
 # %% [markdown]
-# ## Summary
+# ## Підсумок
 #
-# - The raw data is structurally sound: counts match, no unparseable dates, no duplicate keys except the reused `review_id`s.
-# - Exclusions: 2,963 non-delivered orders (all analyses), 267 delivered orders outside 2017-01..2018-08 (monthly KPIs and delivery), 8 delivered orders without a delivery date (delivery), 646 delivered orders without a review (review analysis).
-# - **Validation passed:** all 11 headline numbers (orders 96,211 · revenue R$ 15,377,809.91 · AOV R$ 159.83 · customers 93,358 · repeat customers 2,801 · repeat rate 3.00% · top-category revenue · on-time 93.21% · median 10.21 days · p90 23.06 days · Nov-2017 revenue) and all 20 monthly order counts and revenues are identical in PostgreSQL and in this independent Pandas calculation.
+# - Сирі дані структурно коректні: кількості збігаються, немає дат, що не розпізнаються, немає дублікатів ключів, крім повторно використаних `review_id`.
+# - Виключення: 2,963 недоставлених замовлення (усі аналізи), 267 доставлених замовлень поза 2017-01..2018-08 (щомісячні KPI і доставка), 8 доставлених замовлень без дати доставки (доставка), 646 доставлених замовлень без відгуку (аналіз відгуків).
+# - **Валідацію пройдено:** усі 11 ключових показників (замовлення 96,211 · виручка R$ 15,377,809.91 · AOV R$ 159.83 · клієнти 93,358 · повторні клієнти 2,801 · частка повторних клієнтів 3.00% · виручка топ-категорії · вчасно 93.21% · медіана 10.21 дня · p90 23.06 дня · виручка за листопад 2017) та всі 20 щомісячних кількостей замовлень і значень виручки ідентичні в PostgreSQL і в цьому незалежному розрахунку на Pandas.

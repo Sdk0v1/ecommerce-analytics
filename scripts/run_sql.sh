@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Runs every SQL file in the correct order against the database set in the
-# standard PG* environment variables (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
-# Must be run from the repository root (the \copy paths are relative to it).
+# Запускає всі SQL-файли в правильному порядку на базі даних, заданій у
+# стандартних змінних середовища PG* (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
+# Запускати потрібно з кореня репозиторію (шляхи в \copy відносні до нього).
 set -euo pipefail
 
 SQL_FILES=(
